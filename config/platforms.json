@@ -1,0 +1,44 @@
+{
+  "version": "1.0",
+  "last_updated": "",
+  "llm": {
+    "primary": {
+      "name": "colab_main",
+      "type": "colab",
+      "gmail": "YOUR_GMAIL_HERE",
+      "tunnel_url": "PASTE_COLAB_LLM_URL_HERE",
+      "weekly_limit_hours": 30,
+      "priority": 1,
+      "notebook_path": "notebooks/colab_llm_jina.ipynb"
+    },
+    "standby": [
+      {
+        "name": "kaggle_backup",
+        "type": "kaggle",
+        "gmail": "YOUR_KAGGLE_EMAIL_HERE",
+        "tunnel_url": "PASTE_KAGGLE_LLM_URL_HERE",
+        "weekly_limit_hours": 30,
+        "priority": 2,
+        "notebook_path": "notebooks/kaggle_llm_jina.ipynb"
+      }
+    ]
+  },
+  "search": {
+    "searxng_url": "https://omnis-search.onrender.com",
+    "jina_primary_url": "PASTE_COLAB_JINA_URL_HERE",
+    "jina_standby_url": "PASTE_KAGGLE_JINA_URL_HERE",
+    "over_fetch_multiplier": 2.0,
+    "min_valid_urls": 20,
+    "target_valid_urls": 60
+  },
+  "quality_gate": {
+    "min_probability": 0.60,
+    "candidates": ["HC_A", "HC_B", "Over", "Under"],
+    "exclude_from_gate": ["ML"]
+  },
+  "notification": {
+    "line_notify_token": "YOUR_LINE_TOKEN_HERE",
+    "daily_report_time": "08:00",
+    "alert_on_status_change": true
+  }
+}
