@@ -25,7 +25,7 @@
   },
   
   "search_engine": {
-    "searxng_url": "http://localhost:8080",
+    "searxng_url": "https://omnis-search.onrender.com",
     "categories": ["news", "general"],
     "language": "en",
     "time_range": "week"
