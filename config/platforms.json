@@ -1,9 +1,9 @@
 {
   "omnis_court": {
-    "llm_api_url": "https://experiments-nine-understand-salvation.trycloudflare.com/v1",
+    "llm_api_url": "https://compounds-coat-geo-phone.trycloudflare.com/v1",
     "llm_model_name": "qwen3-14b",
     "llm_api_key": "not-needed",
-    "jina_reader_url": "https://dame-continues-town-commonly.trycloudflare.com/extract",
+    "jina_reader_url": "https://edgar-being-preserve-targeted.trycloudflare.com/extract",
     
     "llm_settings": {
       "max_tokens": 4096,
