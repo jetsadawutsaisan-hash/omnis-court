@@ -1,6 +1,6 @@
 """
-OMNIS-COURT Orchestrator
-ควบคุม 5 Rounds ของ Agentic Workflow
+OMNIS-COURT Orchestrator v2.0
+ควบคุม 6 Rounds ของ Agentic Workflow (Round 0 + Round A-E)
 """
 
 import json
@@ -20,9 +20,10 @@ class Orchestrator:
         self.search = SearchClient()
         self.executor = MonteCarloExecutor(num_iterations=10000)
     
-    def analyze_match(self, match_info: Dict, progress_callback: Callable = None) -> Optional[Dict]:
+    def analyze_match(self, match_info: Dict, progress_callback: Callable = None,
+                     skip_tournament_detection: bool = False) -> Optional[Dict]:
         """
-        วิเคราะห์แมตช์ (5 Rounds)
+        วิเคราะห์แมตช์ (Round 0 + 5 Rounds)
         
         Args:
             match_info: {
@@ -31,6 +32,7 @@ class Orchestrator:
                 "hc_line_a": -2.5, "hc_line_b": 2.5, "ou_line": 22.5
             }
             progress_callback: function(round, message) สำหรับ update UI
+            skip_tournament_detection: ถ้า True → ข้าม Round 0
         
         Returns:
             verdict dict หรือ None ถ้า error
@@ -41,6 +43,27 @@ class Orchestrator:
             print(f"[{round_name}] {message}")
         
         try:
+            # ═══════════════════════════════════════════
+            # ROUND 0: Auto-Detect Tournament Context
+            # ═══════════════════════════════════════════
+            if not skip_tournament_detection:
+                # เช็คว่า tournament + surface ครบไหม
+                has_tournament = match_info.get('tournament') and match_info['tournament'].strip()
+                has_surface = match_info.get('surface') and match_info['surface'] not in ['Unknown', '', None]
+                
+                if has_tournament and has_surface:
+                    notify("Round 0", "⏭️ Tournament context already provided, skipping detection")
+                else:
+                    notify("Round 0", "🔍 Auto-detecting tournament context...")
+                    match_info = self._round_0_detect_tournament(match_info, progress_callback)
+                    
+                    if match_info.get('_tournament_detected'):
+                        notify("Round 0", f"✅ Detected: {match_info.get('tournament')}")
+                    else:
+                        notify("Round 0", "⚠️ Tournament detection failed, using defaults")
+            else:
+                notify("Round 0", "⏭️ Tournament detection skipped by user")
+            
             # ═══════════════════════════════════════════
             # ROUND A: Planning (Qwen วางแผน search queries)
             # ═══════════════════════════════════════════
@@ -118,6 +141,41 @@ class Orchestrator:
             traceback.print_exc()
             return None
     
+    def _round_0_detect_tournament(self, match_info: Dict, progress_callback=None) -> Dict:
+        """Round 0: Auto-detect tournament + retry loop"""
+        
+        def detect_progress(current, total, message):
+            if progress_callback:
+                progress_callback("Round 0", message)
+        
+        detected = self.search.detect_tournament(
+            player_a=match_info.get('player_a', ''),
+            player_b=match_info.get('player_b', ''),
+            max_retries=5,
+            progress_callback=detect_progress,
+            llm_client=self.llm
+        )
+        
+        if detected:
+            # Enrich match_info
+            enriched = match_info.copy()
+            enriched['tournament'] = detected.get('tournament') or match_info.get('tournament') or 'Unknown'
+            enriched['surface'] = detected.get('surface') or match_info.get('surface') or 'Hard'
+            enriched['round'] = detected.get('round', 'Unknown')
+            enriched['court'] = detected.get('court', 'Unknown')
+            enriched['court_speed'] = detected.get('court_speed')
+            enriched['ball'] = detected.get('ball', 'Unknown')
+            enriched['weather'] = detected.get('weather', {})
+            enriched['tournament_confidence'] = detected.get('confidence', 'LOW')
+            enriched['_tournament_detected'] = True
+            enriched['_source_urls'] = detected.get('source_urls', [])
+            enriched['_detect_attempt'] = detected.get('attempt', 0)
+            return enriched
+        
+        # ไม่เจอ → return match_info เดิม
+        match_info['_tournament_detected'] = False
+        return match_info
+    
     def _round_a_plan(self, match_info: Dict) -> List[str]:
         """Round A: วางแผน search queries"""
         prompt = f"""
@@ -130,6 +188,8 @@ Match Information:
 - Player B: {match_info.get('player_b', 'Unknown')}
 - Tournament: {match_info.get('tournament', 'Unknown')}
 - Surface: {match_info.get('surface', 'Unknown')}
+- Round: {match_info.get('round', 'Unknown')}
+- Court: {match_info.get('court', 'Unknown')}
 - HC Line A: {match_info.get('hc_line_a', 'N/A')}
 - HC Line B: {match_info.get('hc_line_b', 'N/A')}
 - O/U Line: {match_info.get('ou_line', 'N/A')}
@@ -139,7 +199,6 @@ Match Information:
         if not response:
             return []
         
-        # Parse JSON
         try:
             queries = json.loads(response)
             if isinstance(queries, list):
@@ -147,7 +206,6 @@ Match Information:
         except:
             pass
         
-        # Fallback: extract จาก response
         json_match = re.search(r'\[.*\]', response, re.DOTALL)
         if json_match:
             try:
@@ -156,14 +214,11 @@ Match Information:
             except:
                 pass
         
-        # Fallback 2: line by line
         return [line.strip().strip('"').strip("'") for line in response.split('\n') 
                 if line.strip() and not line.strip().startswith('#')][:50]
     
     def _round_b_search(self, queries: List[str], progress_callback=None) -> str:
         """Round B: ค้นหาและ extract"""
-        # จำกัดจำนวน queries เพื่อไม่ให้ใช้เวลานานเกินไป
-        # แต่ต้องครอบคลุม 6 Tiers (ขั้นต่ำ 50)
         max_queries = min(len(queries), 50)
         selected_queries = queries[:max_queries]
         
@@ -189,6 +244,11 @@ Match Information:
 - Player B: {match_info.get('player_b')}
 - Tournament: {match_info.get('tournament')}
 - Surface: {match_info.get('surface')}
+- Round: {match_info.get('round', 'Unknown')}
+- Court: {match_info.get('court', 'Unknown')}
+- Court Speed: {match_info.get('court_speed', 'Unknown')}
+- Ball: {match_info.get('ball', 'Unknown')}
+- Weather: {match_info.get('weather', {})}
 
 User's Betting Lines:
 - HC Line A: {match_info.get('hc_line_a')}
@@ -211,13 +271,11 @@ SEARCH REPORT:
         if not response:
             return None, None
         
-        # แยก analysis กับ code
         if "=====PYTHON_CODE=====" in response:
             parts = response.split("=====PYTHON_CODE=====")
             analysis = parts[0].strip()
             python_code = parts[1].strip()
         else:
-            # หา code block
             code_match = re.search(r'```python\s*(.*?)\s*```', response, re.DOTALL)
             if code_match:
                 python_code = code_match.group(1)
@@ -226,7 +284,6 @@ SEARCH REPORT:
                 analysis = response
                 python_code = None
         
-        # ลบ ```python และ ``` ออกจาก code (ถ้ามี)
         if python_code:
             python_code = python_code.replace('```python', '').replace('```', '').strip()
         
@@ -247,6 +304,8 @@ Match Information:
 - Player A: {match_info.get('player_a')}
 - Player B: {match_info.get('player_b')}
 - Tournament: {match_info.get('tournament')}
+- Surface: {match_info.get('surface')}
+- Round: {match_info.get('round', 'Unknown')}
 
 User's Betting Lines (MUST evaluate ALL):
 - Option 1: Player A HC {match_info.get('hc_line_a')}
@@ -264,14 +323,12 @@ MONTE CARLO SIMULATION RESULTS:
         if not response:
             return None
         
-        # Parse JSON
         try:
             verdict = json.loads(response)
             return verdict
         except:
             pass
         
-        # Extract JSON
         json_match = re.search(r'\{.*\}', response, re.DOTALL)
         if json_match:
             try:
@@ -279,5 +336,4 @@ MONTE CARLO SIMULATION RESULTS:
             except:
                 pass
         
-        # Fallback: return as-is
         return {"raw_response": response}
