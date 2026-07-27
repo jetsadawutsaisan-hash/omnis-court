@@ -9,7 +9,7 @@ from monte_carlo import MonteCarloExecutor
 from orchestrator import Orchestrator
 
 # ==========================================
-# OMNIS-COURT DASHBOARD v4.1 (Queue System - Bug Fixed)
+# OMNIS-COURT DASHBOARD v4.2 (Auto Match Time)
 # ==========================================
 
 st.set_page_config(
@@ -89,7 +89,7 @@ if jina_url:
     check_health("Jina Reader", health_url, "📖")
 
 # ==========================================
-# 📝 ADD NEW MATCH (Form) - BUG FIXED
+# 📝 ADD NEW MATCH (Form) - AUTO MATCH TIME
 # ==========================================
 st.markdown("---")
 st.subheader("📝 Add New Match")
@@ -107,19 +107,11 @@ with st.form("add_match_form"):
         hc_line_b = st.number_input("📊 HC Line B", value=2.5, step=0.5)
         ou_line = st.number_input("📊 O/U Line", value=22.5, step=0.5)
         
-        # ✅ แก้: แยก date + time input (ไม่มี st.datetime_input)
-        default_dt = datetime.now() + timedelta(hours=2)
-        
-        col_time1, col_time2 = st.columns(2)
-        with col_time1:
-            match_date = st.date_input("📅 Match Date", value=default_dt.date())
-        with col_time2:
-            match_time_input = st.time_input("⏰ Match Time", value=default_dt.time())
-        
-        # รวม date + time เป็น datetime
-        match_time = datetime.combine(match_date, match_time_input)
+        # ✅ Auto-set match time (+2 hours from now) - ไม่ต้องกรอกเอง!
+        match_time = datetime.now() + timedelta(hours=2)
+        st.info(f"⏰ Match Time: **{match_time.strftime('%H:%M %d/%m/%Y')}** (auto-set: +2 ชม. จากตอนนี้)")
     
-    # ✅ Submit buttons (ต้องมี st.form_submit_button ใน form)
+    # ✅ Submit buttons
     col_btn1, col_btn2 = st.columns(2)
     
     with col_btn1:
@@ -350,5 +342,5 @@ with st.expander("🧪 Quick Tests (Debug)"):
 # FOOTER
 # ==========================================
 st.markdown("---")
-st.caption("OMNIS-COURT v7.1 | Queue System Active | v4.1 Bug Fixed")
+st.caption("OMNIS-COURT v7.1 | Queue System Active | v4.2 Auto Match Time")
 st.caption(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
