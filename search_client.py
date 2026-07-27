@@ -1,11 +1,12 @@
 """
-OMNIS-COURT Search Client
-จัดการ SearXNG (ค้นหา) + Jina Reader (extract)
+OMNIS-COURT Search Client v2.0
+จัดการ SearXNG (ค้นหา) + Jina Reader (extract) + Auto-Detect Tournament
 """
 
 import json
 import requests
 import time
+import re
 from typing import List, Dict, Optional
 from urllib.parse import quote
 import trafilatura
@@ -55,7 +56,6 @@ class SearchClient:
     def extract_with_jina(self, url: str) -> Optional[str]:
         """ดึงเนื้อหาด้วย Jina Reader"""
         try:
-            # Jina URL format: https://xxx.trycloudflare.com/extract?url=...
             base_url = self.jina_url.split('?')[0].rstrip('/')
             if not base_url.endswith('/extract'):
                 base_url = base_url + '/extract'
@@ -100,17 +100,7 @@ class SearchClient:
     
     def research_queries(self, queries: List[str], max_articles_per_query: int = 3, 
                          progress_callback=None) -> str:
-        """
-        ค้นหาและ extract หลาย queries → รวมเป็น Search Report
-        
-        Args:
-            queries: list ของ search queries
-            max_articles_per_query: จำนวนบทความสูงสุดต่อ query
-            progress_callback: function(current, total, message) สำหรับ update UI
-        
-        Returns:
-            Search Report (text) ที่รวมทุกผลลัพธ์
-        """
+        """ค้นหาและ extract หลาย queries → รวมเป็น Search Report"""
         total_queries = len(queries)
         all_articles = []
         seen_urls = set()
@@ -119,12 +109,10 @@ class SearchClient:
             if progress_callback:
                 progress_callback(i, total_queries, f"🔍 Searching: {query[:50]}...")
             
-            # ค้นหา
             results = self.search_searxng(query, num_results=20)
             
-            # Extract เนื้อหา
             extracted = 0
-            for result in results[:max_articles_per_query * 2]:  # ลองมากกว่าที่ต้องการ
+            for result in results[:max_articles_per_query * 2]:
                 url = result['url']
                 if url in seen_urls:
                     continue
@@ -136,7 +124,7 @@ class SearchClient:
                         'query': query,
                         'url': url,
                         'title': result['title'],
-                        'content': content[:3000],  # ตัดให้สั้นลง
+                        'content': content[:3000],
                         'word_count': len(content.split())
                     })
                     extracted += 1
@@ -144,12 +132,11 @@ class SearchClient:
                     if extracted >= max_articles_per_query:
                         break
                 
-                time.sleep(0.3)  # Rate limit
+                time.sleep(0.3)
             
             if progress_callback:
                 progress_callback(i, total_queries, f"✅ Query {i}/{total_queries}: {extracted} articles")
         
-        # รวมเป็น Search Report
         report = self._build_search_report(all_articles)
         
         if progress_callback:
@@ -171,7 +158,6 @@ class SearchClient:
             ""
         ]
         
-        # Group by query
         by_query = {}
         for article in articles:
             query = article['query']
@@ -190,3 +176,186 @@ class SearchClient:
                 report_lines.append(f"Content:\n{article['content'][:2000]}\n")
         
         return "\n".join(report_lines)
+    
+    # ==========================================
+    # 🆕 PHASE 0: AUTO-DETECT TOURNAMENT
+    # ==========================================
+    
+    def detect_tournament(self, player_a: str, player_b: str, max_retries: int = 5,
+                         progress_callback=None, llm_client=None) -> Optional[Dict]:
+        """
+        Auto-detect tournament context (5 retry loops)
+        
+        Retry Strategy:
+        1. Direct match (English)
+        2. Multilingual (ES/FR/IT/DE/JP)
+        3. Broader player search (current tournament)
+        4. Social/news (Twitter/Instagram/news)
+        5. Tournament calendar (ATP/WTA schedule)
+        
+        Returns: {
+            "tournament": "Roland Garros 2026",
+            "surface": "Clay",
+            "round": "Semi-Final",
+            "court": "Philippe Chatrier",
+            "court_speed": 1.8,
+            "ball": "Dunlop ATP",
+            "weather": {"temp": 22, "humidity": 65, "wind": 5},
+            "confidence": "HIGH/MEDIUM/LOW",
+            "source_urls": [...],
+            "attempt": 2
+        }
+        """
+        from llm_client import LLMClient
+        
+        if llm_client is None:
+            llm_client = LLMClient()
+        
+        # 5 Retry Loops with different strategies
+        retry_strategies = [
+            {
+                "name": "Direct Match",
+                "queries": [
+                    f"{player_a} vs {player_b} tennis match 2026",
+                    f"{player_a} {player_b} tennis schedule",
+                    f"ATP WTA draw {player_a} {player_b}"
+                ]
+            },
+            {
+                "name": "Multilingual",
+                "queries": [
+                    f"{player_a} {player_b} partido tenis",  # Spanish
+                    f"{player_a} {player_b} match tennis",   # French
+                    f"{player_a} {player_b} テニス 試合"      # Japanese
+                ]
+            },
+            {
+                "name": "Broader Search",
+                "queries": [
+                    f"{player_a} current tournament 2026",
+                    f"{player_b} ATP schedule this week",
+                    f"tennis tournaments {player_a} playing"
+                ]
+            },
+            {
+                "name": "Social & News",
+                "queries": [
+                    f"{player_a} twitter tournament",
+                    f"{player_a} instagram practice",
+                    f"ATP news {player_a} {player_b}"
+                ]
+            },
+            {
+                "name": "Tournament Calendar",
+                "queries": [
+                    "ATP calendar this week 2026",
+                    "WTA tournaments schedule 2026",
+                    f"{player_a} {player_b} head to head recent"
+                ]
+            }
+        ]
+        
+        for attempt in range(min(max_retries, len(retry_strategies))):
+            strategy = retry_strategies[attempt]
+            
+            if progress_callback:
+                progress_callback(attempt + 1, max_retries, 
+                                f"🔄 Attempt {attempt+1}/{max_retries}: {strategy['name']}")
+            
+            # ค้นหาทุก queries ใน strategy
+            all_snippets = []
+            source_urls = []
+            
+            for query in strategy['queries']:
+                results = self.search_searxng(query, num_results=15)
+                for r in results:
+                    all_snippets.append({
+                        'title': r['title'],
+                        'snippet': r['snippet'],
+                        'url': r['url']
+                    })
+                    if r['url'] not in source_urls:
+                        source_urls.append(r['url'])
+                time.sleep(0.3)
+            
+            if not all_snippets:
+                continue
+            
+            # ใช้ LLM วิเคราะห์ snippets เพื่อดึง tournament context
+            analysis = self._llm_analyze_tournament(
+                player_a, player_b, all_snippets, llm_client
+            )
+            
+            if analysis and analysis.get('tournament'):
+                analysis['attempt'] = attempt + 1
+                analysis['source_urls'] = source_urls[:5]  # เก็บแค่ 5 URLs แรก
+                return analysis
+        
+        # สุดทางแล้ว ไม่เจอ
+        return None
+    
+    def _llm_analyze_tournament(self, player_a: str, player_b: str, 
+                                 snippets: List[Dict], llm_client) -> Optional[Dict]:
+        """ใช้ LLM วิเคราะห์ snippets เพื่อดึง tournament context"""
+        
+        # รวม snippets เป็น text สั้นๆ (ไม่เกิน 8000 chars)
+        snippets_text = ""
+        for i, s in enumerate(snippets[:20], 1):  # จำกัด 20 snippets
+            snippets_text += f"\n[{i}] {s['title']}\n{s['snippet'][:300]}\n"
+            if len(snippets_text) > 7000:
+                break
+        
+        prompt = f"""You are a tennis tournament detective.
+
+Match: {player_a} vs {player_b}
+
+Based on the search snippets below, detect the tournament context:
+
+SNIPPETS:
+{snippets_text}
+
+Return ONLY a JSON object with these fields:
+{{
+  "tournament": "name of tournament (e.g., Roland Garros 2026) or null if not found",
+  "surface": "Clay" or "Hard" or "Grass" or null,
+  "round": "R128/R64/R32/R16/QF/SF/F or null",
+  "court": "court name if found, or null",
+  "court_speed": float (1.0=slow clay, 2.5=medium hard, 3.8=fast grass) or null,
+  "ball": "ball brand (Dunlop/Penn/Slazenger/Head) or null",
+  "weather": {{"temp": int celsius, "humidity": int percent, "wind": int km/h}} or null,
+  "confidence": "HIGH" or "MEDIUM" or "LOW",
+  "evidence": "brief 1-sentence reason for your answer"
+}}
+
+Rules:
+- If tournament is clearly found, set confidence to HIGH
+- If partially found (e.g., tournament name but no round), set MEDIUM
+- If only guessing, set LOW and set tournament to null
+- Use realistic court_speed values: Roland Garros = 1.8, Wimbledon = 3.8, US Open = 2.9
+- Return ONLY JSON, no markdown, no explanations
+"""
+        
+        response = llm_client.call_qwen(prompt, max_tokens=1000, temperature=0.2)
+        if not response:
+            return None
+        
+        # Parse JSON
+        try:
+            result = json.loads(response)
+            if isinstance(result, dict):
+                # กรอง null values ออก
+                return {k: v for k, v in result.items() if v is not None and v != {}}
+        except:
+            pass
+        
+        # Fallback: extract JSON
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            try:
+                result = json.loads(json_match.group())
+                if isinstance(result, dict):
+                    return {k: v for k, v in result.items() if v is not None and v != {}}
+            except:
+                pass
+        
+        return None
