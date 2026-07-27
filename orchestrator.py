@@ -1,0 +1,283 @@
+"""
+OMNIS-COURT Orchestrator
+ควบคุม 5 Rounds ของ Agentic Workflow
+"""
+
+import json
+import re
+from typing import Dict, List, Optional, Callable
+from llm_client import LLMClient
+from search_client import SearchClient
+from monte_carlo import MonteCarloExecutor
+from prompt_v7_1 import PROMPT_V7_1, ROUND_A_PLANNING, ROUND_C_ANALYSIS, ROUND_E_VERDICT
+
+
+class Orchestrator:
+    """ควบคุม workflow ทั้งหมด"""
+    
+    def __init__(self):
+        self.llm = LLMClient()
+        self.search = SearchClient()
+        self.executor = MonteCarloExecutor(num_iterations=10000)
+    
+    def analyze_match(self, match_info: Dict, progress_callback: Callable = None) -> Optional[Dict]:
+        """
+        วิเคราะห์แมตช์ (5 Rounds)
+        
+        Args:
+            match_info: {
+                "player_a": "...", "player_b": "...",
+                "tournament": "...", "surface": "...",
+                "hc_line_a": -2.5, "hc_line_b": 2.5, "ou_line": 22.5
+            }
+            progress_callback: function(round, message) สำหรับ update UI
+        
+        Returns:
+            verdict dict หรือ None ถ้า error
+        """
+        def notify(round_name, message):
+            if progress_callback:
+                progress_callback(round_name, message)
+            print(f"[{round_name}] {message}")
+        
+        try:
+            # ═══════════════════════════════════════════
+            # ROUND A: Planning (Qwen วางแผน search queries)
+            # ═══════════════════════════════════════════
+            notify("Round A", "🎯 Planning search queries...")
+            queries = self._round_a_plan(match_info)
+            
+            if not queries:
+                notify("Round A", "❌ Failed to generate queries")
+                return None
+            
+            notify("Round A", f"✅ Generated {len(queries)} queries")
+            
+            # ═══════════════════════════════════════════
+            # ROUND B: Search & Extract (SearXNG + Jina)
+            # ═══════════════════════════════════════════
+            notify("Round B", "🔍 Searching and extracting content...")
+            search_report = self._round_b_search(queries, progress_callback)
+            
+            if not search_report or len(search_report) < 500:
+                notify("Round B", "⚠️ Search report too short")
+                return None
+            
+            notify("Round B", f"✅ Search report: {len(search_report)} characters")
+            
+            # ═══════════════════════════════════════════
+            # ROUND C: Analysis + Code Generation (Qwen)
+            # ═══════════════════════════════════════════
+            notify("Round C", "🧠 Analyzing and generating code...")
+            analysis, python_code = self._round_c_analyze(search_report, match_info)
+            
+            if not python_code:
+                notify("Round C", "❌ Failed to generate code")
+                return None
+            
+            notify("Round C", f"✅ Generated code: {len(python_code)} characters")
+            
+            # ═══════════════════════════════════════════
+            # ROUND D: Monte Carlo Execution
+            # ═══════════════════════════════════════════
+            notify("Round D", "🎲 Running 10,000 simulations...")
+            simulation_json = self._round_d_simulate(python_code)
+            
+            if not simulation_json:
+                notify("Round D", "❌ Simulation failed")
+                return None
+            
+            notify("Round D", f"✅ Simulation completed: {simulation_json.get('N', 0)} iterations")
+            
+            # ═══════════════════════════════════════════
+            # ROUND E: Final Verdict (Qwen)
+            # ═══════════════════════════════════════════
+            notify("Round E", "⚖️ Generating final verdict...")
+            verdict = self._round_e_verdict(simulation_json, match_info)
+            
+            if not verdict:
+                notify("Round E", "❌ Failed to generate verdict")
+                return None
+            
+            notify("Round E", "✅ Verdict generated!")
+            
+            # เพิ่ม metadata
+            verdict['_metadata'] = {
+                'queries_count': len(queries),
+                'search_report_length': len(search_report),
+                'python_code_length': len(python_code),
+                'simulations': simulation_json.get('N', 0),
+                'match_info': match_info
+            }
+            
+            return verdict
+            
+        except Exception as e:
+            notify("Error", f"❌ Orchestrator failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _round_a_plan(self, match_info: Dict) -> List[str]:
+        """Round A: วางแผน search queries"""
+        prompt = f"""
+{PROMPT_V7_1}
+
+{ROUND_A_PLANNING}
+
+Match Information:
+- Player A: {match_info.get('player_a', 'Unknown')}
+- Player B: {match_info.get('player_b', 'Unknown')}
+- Tournament: {match_info.get('tournament', 'Unknown')}
+- Surface: {match_info.get('surface', 'Unknown')}
+- HC Line A: {match_info.get('hc_line_a', 'N/A')}
+- HC Line B: {match_info.get('hc_line_b', 'N/A')}
+- O/U Line: {match_info.get('ou_line', 'N/A')}
+"""
+        
+        response = self.llm.call_qwen(prompt, max_tokens=4096, temperature=0.3)
+        if not response:
+            return []
+        
+        # Parse JSON
+        try:
+            queries = json.loads(response)
+            if isinstance(queries, list):
+                return [q for q in queries if isinstance(q, str)]
+        except:
+            pass
+        
+        # Fallback: extract จาก response
+        json_match = re.search(r'\[.*\]', response, re.DOTALL)
+        if json_match:
+            try:
+                queries = json.loads(json_match.group())
+                return [q for q in queries if isinstance(q, str)]
+            except:
+                pass
+        
+        # Fallback 2: line by line
+        return [line.strip().strip('"').strip("'") for line in response.split('\n') 
+                if line.strip() and not line.strip().startswith('#')][:50]
+    
+    def _round_b_search(self, queries: List[str], progress_callback=None) -> str:
+        """Round B: ค้นหาและ extract"""
+        # จำกัดจำนวน queries เพื่อไม่ให้ใช้เวลานานเกินไป
+        # แต่ต้องครอบคลุม 6 Tiers (ขั้นต่ำ 50)
+        max_queries = min(len(queries), 50)
+        selected_queries = queries[:max_queries]
+        
+        def search_progress(current, total, message):
+            if progress_callback:
+                progress_callback("Round B", f"[{current}/{total}] {message}")
+        
+        return self.search.research_queries(
+            selected_queries,
+            max_articles_per_query=2,
+            progress_callback=search_progress
+        )
+    
+    def _round_c_analyze(self, search_report: str, match_info: Dict):
+        """Round C: วิเคราะห์ + Generate code"""
+        prompt = f"""
+{PROMPT_V7_1}
+
+{ROUND_C_ANALYSIS}
+
+Match Information:
+- Player A: {match_info.get('player_a')}
+- Player B: {match_info.get('player_b')}
+- Tournament: {match_info.get('tournament')}
+- Surface: {match_info.get('surface')}
+
+User's Betting Lines:
+- HC Line A: {match_info.get('hc_line_a')}
+- HC Line B: {match_info.get('hc_line_b')}
+- O/U Line: {match_info.get('ou_line')}
+
+Options to Evaluate:
+1. Player A - HC Line A ({match_info.get('hc_line_a')})
+2. Player B - HC Line B ({match_info.get('hc_line_b')})
+3. Over {match_info.get('ou_line')}
+4. Under {match_info.get('ou_line')}
+
+SEARCH REPORT:
+───────────────────────────────────────────
+{search_report[:30000]}
+───────────────────────────────────────────
+"""
+        
+        response = self.llm.call_qwen(prompt, max_tokens=16384, temperature=0.5)
+        if not response:
+            return None, None
+        
+        # แยก analysis กับ code
+        if "=====PYTHON_CODE=====" in response:
+            parts = response.split("=====PYTHON_CODE=====")
+            analysis = parts[0].strip()
+            python_code = parts[1].strip()
+        else:
+            # หา code block
+            code_match = re.search(r'```python\s*(.*?)\s*```', response, re.DOTALL)
+            if code_match:
+                python_code = code_match.group(1)
+                analysis = response[:code_match.start()].strip()
+            else:
+                analysis = response
+                python_code = None
+        
+        # ลบ ```python และ ``` ออกจาก code (ถ้ามี)
+        if python_code:
+            python_code = python_code.replace('```python', '').replace('```', '').strip()
+        
+        return analysis, python_code
+    
+    def _round_d_simulate(self, python_code: str) -> Optional[Dict]:
+        """Round D: รัน simulation"""
+        return self.executor.execute(python_code)
+    
+    def _round_e_verdict(self, simulation_json: Dict, match_info: Dict) -> Optional[Dict]:
+        """Round E: ฟันธง"""
+        prompt = f"""
+{PROMPT_V7_1}
+
+{ROUND_E_VERDICT}
+
+Match Information:
+- Player A: {match_info.get('player_a')}
+- Player B: {match_info.get('player_b')}
+- Tournament: {match_info.get('tournament')}
+
+User's Betting Lines (MUST evaluate ALL):
+- Option 1: Player A HC {match_info.get('hc_line_a')}
+- Option 2: Player B HC {match_info.get('hc_line_b')}
+- Option 3: Over {match_info.get('ou_line')} total games
+- Option 4: Under {match_info.get('ou_line')} total games
+
+MONTE CARLO SIMULATION RESULTS:
+───────────────────────────────────────────
+{json.dumps(simulation_json, indent=2, ensure_ascii=False)}
+───────────────────────────────────────────
+"""
+        
+        response = self.llm.call_qwen(prompt, max_tokens=8192, temperature=0.4)
+        if not response:
+            return None
+        
+        # Parse JSON
+        try:
+            verdict = json.loads(response)
+            return verdict
+        except:
+            pass
+        
+        # Extract JSON
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group())
+            except:
+                pass
+        
+        # Fallback: return as-is
+        return {"raw_response": response}
