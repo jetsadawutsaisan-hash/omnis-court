@@ -1,3 +1,40 @@
+# 🎾 OMNIS-COURT Operations Manual
+**Version:** 3.0 (Infrastructure Complete)
+**Philosophy:** $0 System | Config-Driven | Quality > Speed
+
+## 🌅 Daily Routine (12-15 นาที ทุกเช้า)
+ระบบนี้เป็น "$0 System" จึงต้องมีการปลุกเครื่อง (Wake up) ทุกวัน
+
+1. **เปิด Colab:** เข้าไปที่ `notebooks/colab_llm_jina.ipynb`
+2. **Run All:** เลือก Runtime เป็น T4 GPU แล้วรันตั้งแต่ Cell 1 ถึง 5
+3. **จด URL:** คัดลอก 2 URL จาก Cell 5 (LLM API และ Jina Reader)
+4. **อัพเดท Config:** นำ URL ไปวางใน `config/platforms.json` บน GitHub
+5. **Commit:** กด Commit changes
+6. **Verify:** เช็คหน้า Dashboard (`omnis-dashboard.onrender.com`) ต้องขึ้นสีเขียว ✅ ครบ 3 ดวง
+7. **ปิดจอ:** ปล่อยให้ Anti-idle ทำงาน (ห้ามปิด Tab Colab)
+
+## 🚨 Troubleshooting (เมื่อมีไฟแดง ❌)
+
+| ปัญหา | สาเหตุที่เป็นไปได้ | วิธีแก้ |
+|-------|-------------------|---------|
+| **SearXNG ❌** | Render sleep หรือ Deploy ล้มเหลว | เข้า Render dashboard กด Manual Restart |
+| **Qwen3 ❌** | Colab disconnect หรือ URL เก่า | เช็ค Tab Colab -> Reconnect -> อัพเดท Config |
+| **Jina ❌** | Colab disconnect หรือ URL เก่า | เช็ค Tab Colab -> Reconnect -> อัพเดท Config |
+| **Dashboard โหลดไม่ขึ้น** | Render Free Tier spin down | รอ 30-60 วินาที (Refresh หน้าเว็บ) |
+
+## ⚙️ System Architecture
+- **Search Layer:** SearXNG (Render) - Over-fetch 80-100 URLs
+- **Extraction Layer:** Jina Reader (Colab + Cloudflare)
+- **Reasoning Layer:** Qwen3-14B (Colab + Cloudflare)
+- **Orchestration:** Streamlit App (Part 4)
+- **Tracking:** SQLite (Part 5)
+- **Notification:** LINE Notify (Part 6)
+
+## 🛡️ Core Rules
+1. **Over-fetch -> Filter:** หาให้เยอะ แล้วค่อยทิ้ง ดีกว่าหาพอดีแล้วขาด
+2. **LLM = Worker:** LLM มีหน้าที่คิดหนัก แต่ต้อง Output เป็น JSON สั้นๆ
+3. **Quality Gate:** Probability ต้อง ≥ 60% เท่านั้นถึงจะ PASS
+4. **No Odds:** เราหา True Probability ไม่สนใจราคาตลาด
 # 📘 OMNIS-COURT Operations Manual
 
 ## 🔄 Daily Startup Routine (Every Day, ~12 min)
