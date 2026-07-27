@@ -9,7 +9,7 @@ from monte_carlo import MonteCarloExecutor
 from orchestrator import Orchestrator
 
 # ==========================================
-# OMNIS-COURT DASHBOARD v4.0 (Queue System)
+# OMNIS-COURT DASHBOARD v4.1 (Queue System - Bug Fixed)
 # ==========================================
 
 st.set_page_config(
@@ -22,13 +22,13 @@ st.title("🎾 OMNIS-COURT Command Center")
 
 # Initialize session_state
 if 'analysis_queue' not in st.session_state:
-    st.session_state.analysis_queue = []  # list of match_info dicts
+    st.session_state.analysis_queue = []
 
 if 'analysis_results' not in st.session_state:
-    st.session_state.analysis_results = []  # list of verdict dicts
+    st.session_state.analysis_results = []
 
 if 'current_analysis' not in st.session_state:
-    st.session_state.current_analysis = None  # match_info กำลังวิเคราะห์
+    st.session_state.current_analysis = None
 
 if 'current_progress' not in st.session_state:
     st.session_state.current_progress = {"round": "", "message": ""}
@@ -61,7 +61,8 @@ def check_health(name, url, icon, timeout=10):
     with col1:
         st.markdown(f"### {icon} {name}")
     with col2:
-        st.code(url[:50] + "..." if len(url) > 50 else url, language="text")
+        display_url = url[:50] + "..." if len(url) > 50 else url
+        st.code(display_url, language="text")
     with col3:
         try:
             response = requests.get(url, timeout=timeout)
@@ -84,10 +85,11 @@ if llm_url:
 
 jina_url = omnis.get('jina_reader_url', '')
 if jina_url:
-    check_health("Jina Reader", jina_url.split('?')[0].replace('/extract', '/health'), "📖")
+    health_url = jina_url.split('?')[0].replace('/extract', '/health')
+    check_health("Jina Reader", health_url, "📖")
 
 # ==========================================
-# 📝 ADD NEW MATCH (Form)
+# 📝 ADD NEW MATCH (Form) - BUG FIXED
 # ==========================================
 st.markdown("---")
 st.subheader("📝 Add New Match")
@@ -105,17 +107,33 @@ with st.form("add_match_form"):
         hc_line_b = st.number_input("📊 HC Line B", value=2.5, step=0.5)
         ou_line = st.number_input("📊 O/U Line", value=22.5, step=0.5)
         
-        # Match time (for queue sorting)
-        default_time = datetime.now() + timedelta(hours=2)
-        match_time = st.datetime_input("⏰ Match Time", value=default_time)
+        # ✅ แก้: แยก date + time input (ไม่มี st.datetime_input)
+        default_dt = datetime.now() + timedelta(hours=2)
+        
+        col_time1, col_time2 = st.columns(2)
+        with col_time1:
+            match_date = st.date_input("📅 Match Date", value=default_dt.date())
+        with col_time2:
+            match_time_input = st.time_input("⏰ Match Time", value=default_dt.time())
+        
+        # รวม date + time เป็น datetime
+        match_time = datetime.combine(match_date, match_time_input)
     
+    # ✅ Submit buttons (ต้องมี st.form_submit_button ใน form)
     col_btn1, col_btn2 = st.columns(2)
     
     with col_btn1:
-        skip_queue = st.form_submit_button("⚡ ลัดคิว (Analyze Now)", type="primary", use_container_width=True)
+        skip_queue = st.form_submit_button(
+            "⚡ ลัดคิว (Analyze Now)", 
+            type="primary", 
+            use_container_width=True
+        )
     
     with col_btn2:
-        add_to_queue = st.form_submit_button("➕ เพิ่มคิว", use_container_width=True)
+        add_to_queue = st.form_submit_button(
+            "➕ เพิ่มคิว", 
+            use_container_width=True
+        )
 
 # Process form submission
 if skip_queue or add_to_queue:
@@ -126,7 +144,7 @@ if skip_queue or add_to_queue:
             "player_a": player_a,
             "player_b": player_b,
             "tournament": tournament,
-            "surface": "Unknown",  # จะ auto-detect ใน orchestrator
+            "surface": "Unknown",
             "hc_line_a": hc_line_a,
             "hc_line_b": hc_line_b,
             "ou_line": ou_line,
@@ -135,25 +153,22 @@ if skip_queue or add_to_queue:
         }
         
         if skip_queue:
-            # ลัดคิว: วิเคราะห์ทันที
             st.session_state.current_analysis = match_info
             st.rerun()
         
         elif add_to_queue:
-            # เพิ่มคิว: เรียงตาม match_time
             st.session_state.analysis_queue.append(match_info)
             st.session_state.analysis_queue.sort(key=lambda x: x['match_time'])
             st.success(f"✅ เพิ่ม {player_a} vs {player_b} เข้าคิวแล้ว")
             st.rerun()
 
 # ==========================================
-# 📋 ANALYSIS QUEUE (เรียงตามเวลาแข่ง)
+# 📋 ANALYSIS QUEUE
 # ==========================================
 st.markdown("---")
 st.subheader(f"📋 Analysis Queue ({len(st.session_state.analysis_queue)} matches)")
 
 if st.session_state.analysis_queue:
-    # แสดง queue table
     for i, match in enumerate(st.session_state.analysis_queue):
         col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
         
@@ -169,24 +184,21 @@ if st.session_state.analysis_queue:
             st.caption(f"HC: {match['hc_line_a']}/{match['hc_line_b']} | O/U: {match['ou_line']}")
         
         with col4:
-            # ปุ่มลบ
             if st.button("🗑️", key=f"delete_{i}"):
                 st.session_state.analysis_queue.pop(i)
                 st.rerun()
         
         st.markdown("---")
     
-    # ปุ่มเริ่มวิเคราะห์คิว
     if not st.session_state.current_analysis:
         if st.button("▶️ Start Queue Analysis", type="primary"):
-            # ดึงแมตช์แรกจากคิว
             st.session_state.current_analysis = st.session_state.analysis_queue.pop(0)
             st.rerun()
 else:
     st.info("💡 คิวว่าง - เพิ่มแมตช์ด้านบน")
 
 # ==========================================
-# 🎯 CURRENT ANALYSIS (กำลังวิเคราะห์)
+# 🎯 CURRENT ANALYSIS
 # ==========================================
 if st.session_state.current_analysis:
     st.markdown("---")
@@ -218,7 +230,6 @@ if st.session_state.current_analysis:
         if round_name in round_progress:
             progress_bar.progress(round_progress[round_name])
     
-    # รัน Orchestrator
     try:
         orchestrator = Orchestrator()
         with st.spinner("🧠 Running analysis pipeline..."):
@@ -228,17 +239,14 @@ if st.session_state.current_analysis:
         status_text.markdown("**✅ Analysis Complete!**")
         
         if verdict:
-            # เก็บผลลัพธ์
             st.session_state.analysis_results.append({
                 'match_info': match,
                 'verdict': verdict,
                 'completed_at': datetime.now()
             })
             
-            # ล้าง current_analysis
             st.session_state.current_analysis = None
             
-            # ถ้ามีคิวต่อ → เริ่มอันถัดไป
             if st.session_state.analysis_queue:
                 st.session_state.current_analysis = st.session_state.analysis_queue.pop(0)
             
@@ -254,13 +262,12 @@ if st.session_state.current_analysis:
         st.session_state.current_analysis = None
 
 # ==========================================
-# 💎 RESULTS (วิเคราะห์เสร็จแล้ว)
+# 💎 RESULTS
 # ==========================================
 if st.session_state.analysis_results:
     st.markdown("---")
     st.subheader(f"💎 Results ({len(st.session_state.analysis_results)} completed)")
     
-    # แสดง results table
     for i, result in enumerate(reversed(st.session_state.analysis_results)):
         match = result['match_info']
         verdict = result['verdict']
@@ -275,7 +282,6 @@ if st.session_state.analysis_results:
             with col3:
                 st.metric("📊 Lines", f"HC: {match['hc_line_a']} | O/U: {match['ou_line']}")
             
-            # Apex Pick
             apex = verdict.get('apex_pick', {})
             if apex:
                 st.markdown("### 🏆 APEX PICK")
@@ -289,7 +295,6 @@ if st.session_state.analysis_results:
                 with col_a3:
                     st.metric("🎲 Confidence", apex.get('confidence', 'N/A'))
                 
-                # Quality Gate
                 if prob >= 0.60:
                     st.success(f"✅ **QUALITY GATE PASSED** ({prob*100:.1f}% ≥ 60%)")
                 else:
@@ -300,7 +305,6 @@ if st.session_state.analysis_results:
                     st.markdown(f"**Most Likely Path:** {apex.get('most_likely_path', 'N/A')}")
                     st.warning(f"**⚠️ Risk:** {apex.get('risk_warning', 'N/A')}")
             
-            # Option Crucible
             crucible = verdict.get('option_crucible', [])
             if crucible:
                 with st.expander(f"⚖️ Option Crucible ({len(crucible)} options)"):
@@ -311,12 +315,11 @@ if st.session_state.analysis_results:
                         st.markdown(f"Reasoning: {opt.get('reasoning', 'N/A')}")
                         st.markdown("---")
             
-            # Raw JSON
             with st.expander("🔍 Raw Verdict JSON"):
                 st.json(verdict)
 
 # ==========================================
-# 🧪 QUICK TESTS (Optional)
+# 🧪 QUICK TESTS
 # ==========================================
 with st.expander("🧪 Quick Tests (Debug)"):
     col1, col2 = st.columns(2)
@@ -347,5 +350,5 @@ with st.expander("🧪 Quick Tests (Debug)"):
 # FOOTER
 # ==========================================
 st.markdown("---")
-st.caption("OMNIS-COURT v7.1 | Queue System Active")
+st.caption("OMNIS-COURT v7.1 | Queue System Active | v4.1 Bug Fixed")
 st.caption(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
