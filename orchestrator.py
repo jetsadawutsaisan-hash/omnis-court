@@ -1,6 +1,6 @@
 """
-OMNIS-COURT Orchestrator v2.0
-ควบคุม 6 Rounds ของ Agentic Workflow (Round 0 + Round A-E)
+OMNIS-COURT Orchestrator v3.0 - TRUE AGENTIC
+Think-Act-Observe pattern for all rounds
 """
 
 import json
@@ -13,7 +13,7 @@ from prompt_v7_1 import PROMPT_V7_1, ROUND_A_PLANNING, ROUND_C_ANALYSIS, ROUND_E
 
 
 class Orchestrator:
-    """ควบคุม workflow ทั้งหมด"""
+    """ควบคุม workflow ทั้งหมด (6 Rounds)"""
     
     def __init__(self):
         self.llm = LLMClient()
@@ -22,52 +22,35 @@ class Orchestrator:
     
     def analyze_match(self, match_info: Dict, progress_callback: Callable = None,
                      skip_tournament_detection: bool = False) -> Optional[Dict]:
-        """
-        วิเคราะห์แมตช์ (Round 0 + 5 Rounds)
+        """วิเคราะห์แมตช์ (Round 0 + Round A-E)"""
         
-        Args:
-            match_info: {
-                "player_a": "...", "player_b": "...",
-                "tournament": "...", "surface": "...",
-                "hc_line_a": -2.5, "hc_line_b": 2.5, "ou_line": 22.5
-            }
-            progress_callback: function(round, message) สำหรับ update UI
-            skip_tournament_detection: ถ้า True → ข้าม Round 0
-        
-        Returns:
-            verdict dict หรือ None ถ้า error
-        """
         def notify(round_name, message):
             if progress_callback:
                 progress_callback(round_name, message)
             print(f"[{round_name}] {message}")
         
         try:
-            # ═══════════════════════════════════════════
-            # ROUND 0: Auto-Detect Tournament Context
-            # ═══════════════════════════════════════════
+            # ═══ ROUND 0: Auto-Detect Tournament (True Agentic) ═══
             if not skip_tournament_detection:
-                # เช็คว่า tournament + surface ครบไหม
                 has_tournament = match_info.get('tournament') and match_info['tournament'].strip()
                 has_surface = match_info.get('surface') and match_info['surface'] not in ['Unknown', '', None]
                 
                 if has_tournament and has_surface:
-                    notify("Round 0", "⏭️ Tournament context already provided, skipping detection")
+                    notify("Round 0", "⏭️ Tournament context already provided, skipping")
                 else:
-                    notify("Round 0", "🔍 Auto-detecting tournament context...")
+                    notify("Round 0", "🔍 True Agentic tournament detection...")
                     match_info = self._round_0_detect_tournament(match_info, progress_callback)
                     
                     if match_info.get('_tournament_detected'):
-                        notify("Round 0", f"✅ Detected: {match_info.get('tournament')}")
+                        notify("Round 0", f"✅ Detected: {match_info.get('tournament')} "
+                                         f"(confidence: {match_info.get('tournament_confidence', 'LOW')})")
                     else:
                         notify("Round 0", "⚠️ Tournament detection failed, using defaults")
             else:
-                notify("Round 0", "⏭️ Tournament detection skipped by user")
+                notify("Round 0", "⏭️ Skipped by user")
             
-            # ═══════════════════════════════════════════
-            # ROUND A: Planning (Qwen วางแผน search queries)
-            # ═══════════════════════════════════════════
-            notify("Round A", "🎯 Planning search queries...")
+            # ═══ ROUND A: Planning (True Agentic) ═══
+            notify("Round A", "🎯 LLM planning 50+ search queries...")
             queries = self._round_a_plan(match_info)
             
             if not queries:
@@ -76,33 +59,27 @@ class Orchestrator:
             
             notify("Round A", f"✅ Generated {len(queries)} queries")
             
-            # ═══════════════════════════════════════════
-            # ROUND B: Search & Extract (SearXNG + Jina)
-            # ═══════════════════════════════════════════
-            notify("Round B", "🔍 Searching and extracting content...")
+            # ═══ ROUND B: Search & Extract ═══
+            notify("Round B", "🔍 Searching + Extracting ALL content...")
             search_report = self._round_b_search(queries, progress_callback)
             
             if not search_report or len(search_report) < 500:
                 notify("Round B", "⚠️ Search report too short")
                 return None
             
-            notify("Round B", f"✅ Search report: {len(search_report)} characters")
+            notify("Round B", f"✅ Search report: {len(search_report)} chars")
             
-            # ═══════════════════════════════════════════
-            # ROUND C: Analysis + Code Generation (Qwen)
-            # ═══════════════════════════════════════════
-            notify("Round C", "🧠 Analyzing and generating code...")
-            analysis, python_code = self._round_c_analyze(search_report, match_info)
+            # ═══ ROUND C: Analysis + Code Gen (with Chain-of-Thought) ═══
+            notify("Round C", "🧠 Analyzing + Generating code (with reasoning)...")
+            analysis, python_code, reasoning = self._round_c_analyze(search_report, match_info)
             
             if not python_code:
                 notify("Round C", "❌ Failed to generate code")
                 return None
             
-            notify("Round C", f"✅ Generated code: {len(python_code)} characters")
+            notify("Round C", f"✅ Code: {len(python_code)} chars, Reasoning: {len(reasoning or '')} chars")
             
-            # ═══════════════════════════════════════════
-            # ROUND D: Monte Carlo Execution
-            # ═══════════════════════════════════════════
+            # ═══ ROUND D: Monte Carlo Execution ═══
             notify("Round D", "🎲 Running 10,000 simulations...")
             simulation_json = self._round_d_simulate(python_code)
             
@@ -110,11 +87,9 @@ class Orchestrator:
                 notify("Round D", "❌ Simulation failed")
                 return None
             
-            notify("Round D", f"✅ Simulation completed: {simulation_json.get('N', 0)} iterations")
+            notify("Round D", f"✅ Simulations: {simulation_json.get('N', 0)}")
             
-            # ═══════════════════════════════════════════
-            # ROUND E: Final Verdict (Qwen)
-            # ═══════════════════════════════════════════
+            # ═══ ROUND E: Final Verdict ═══
             notify("Round E", "⚖️ Generating final verdict...")
             verdict = self._round_e_verdict(simulation_json, match_info)
             
@@ -124,11 +99,13 @@ class Orchestrator:
             
             notify("Round E", "✅ Verdict generated!")
             
-            # เพิ่ม metadata
+            # Metadata
             verdict['_metadata'] = {
                 'queries_count': len(queries),
                 'search_report_length': len(search_report),
                 'python_code_length': len(python_code),
+                'reasoning_length': len(reasoning or ''),
+                'reasoning': reasoning,
                 'simulations': simulation_json.get('N', 0),
                 'match_info': match_info
             }
@@ -142,7 +119,7 @@ class Orchestrator:
             return None
     
     def _round_0_detect_tournament(self, match_info: Dict, progress_callback=None) -> Dict:
-        """Round 0: Auto-detect tournament + retry loop"""
+        """Round 0: True Agentic Tournament Detection"""
         
         def detect_progress(current, total, message):
             if progress_callback:
@@ -151,13 +128,12 @@ class Orchestrator:
         detected = self.search.detect_tournament(
             player_a=match_info.get('player_a', ''),
             player_b=match_info.get('player_b', ''),
-            max_retries=5,
+            max_retries=3,
             progress_callback=detect_progress,
             llm_client=self.llm
         )
         
         if detected:
-            # Enrich match_info
             enriched = match_info.copy()
             enriched['tournament'] = detected.get('tournament') or match_info.get('tournament') or 'Unknown'
             enriched['surface'] = detected.get('surface') or match_info.get('surface') or 'Hard'
@@ -170,14 +146,15 @@ class Orchestrator:
             enriched['_tournament_detected'] = True
             enriched['_source_urls'] = detected.get('source_urls', [])
             enriched['_detect_attempt'] = detected.get('attempt', 0)
+            enriched['_total_searches'] = detected.get('total_searches', 0)
+            enriched['_total_articles'] = detected.get('total_articles', 0)
             return enriched
         
-        # ไม่เจอ → return match_info เดิม
         match_info['_tournament_detected'] = False
         return match_info
     
     def _round_a_plan(self, match_info: Dict) -> List[str]:
-        """Round A: วางแผน search queries"""
+        """Round A: True Agentic Planning (50+ queries)"""
         prompt = f"""
 {PROMPT_V7_1}
 
@@ -199,6 +176,7 @@ Match Information:
         if not response:
             return []
         
+        # Parse JSON array
         try:
             queries = json.loads(response)
             if isinstance(queries, list):
@@ -214,11 +192,12 @@ Match Information:
             except:
                 pass
         
-        return [line.strip().strip('"').strip("'") for line in response.split('\n') 
+        # Fallback
+        return [line.strip().strip('"').strip("'") for line in response.split('\n')
                 if line.strip() and not line.strip().startswith('#')][:50]
     
     def _round_b_search(self, queries: List[str], progress_callback=None) -> str:
-        """Round B: ค้นหาและ extract"""
+        """Round B: Search + Extract"""
         max_queries = min(len(queries), 50)
         selected_queries = queries[:max_queries]
         
@@ -233,7 +212,7 @@ Match Information:
         )
     
     def _round_c_analyze(self, search_report: str, match_info: Dict):
-        """Round C: วิเคราะห์ + Generate code"""
+        """Round C: Analysis + Code Gen (with Chain-of-Thought)"""
         prompt = f"""
 {PROMPT_V7_1}
 
@@ -269,32 +248,45 @@ SEARCH REPORT:
         
         response = self.llm.call_qwen(prompt, max_tokens=16384, temperature=0.5)
         if not response:
-            return None, None
+            return None, None, None
+        
+        # Parse Chain-of-Thought + Code
+        reasoning = ""
+        python_code = None
         
         if "=====PYTHON_CODE=====" in response:
             parts = response.split("=====PYTHON_CODE=====")
-            analysis = parts[0].strip()
+            reasoning = parts[0].strip()
             python_code = parts[1].strip()
         else:
+            # Fallback: code block
             code_match = re.search(r'```python\s*(.*?)\s*```', response, re.DOTALL)
             if code_match:
                 python_code = code_match.group(1)
-                analysis = response[:code_match.start()].strip()
+                reasoning = response[:code_match.start()].strip()
             else:
-                analysis = response
+                reasoning = response
                 python_code = None
         
+        # Clean reasoning (remove "REASONING:" prefix if present)
+        if reasoning:
+            if reasoning.startswith("REASONING"):
+                reasoning = reasoning[9:].strip()
+                if reasoning.startswith(":"):
+                    reasoning = reasoning[1:].strip()
+        
+        # Clean code
         if python_code:
             python_code = python_code.replace('```python', '').replace('```', '').strip()
         
-        return analysis, python_code
+        return reasoning, python_code, reasoning
     
     def _round_d_simulate(self, python_code: str) -> Optional[Dict]:
-        """Round D: รัน simulation"""
+        """Round D: Execute simulation"""
         return self.executor.execute(python_code)
     
     def _round_e_verdict(self, simulation_json: Dict, match_info: Dict) -> Optional[Dict]:
-        """Round E: ฟันธง"""
+        """Round E: Final verdict"""
         prompt = f"""
 {PROMPT_V7_1}
 
