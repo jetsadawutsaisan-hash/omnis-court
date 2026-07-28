@@ -1,19 +1,20 @@
 """
-OMNIS-COURT Search Client v2.0
-จัดการ SearXNG (ค้นหา) + Jina Reader (extract) + Auto-Detect Tournament
+OMNIS-COURT Search Client v3.0 - TRUE AGENTIC
+LLM-Driven Search Pipeline: LLM (Brain) → SearXNG (Scout) → Jina (Analyst) → LLM (Decide)
 """
 
 import json
 import requests
 import time
 import re
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Callable
 from urllib.parse import quote
+from datetime import datetime, timedelta
 import trafilatura
 
 
 class SearchClient:
-    """Client สำหรับค้นหาและดึงเนื้อหา"""
+    """True Agentic Search Client"""
     
     def __init__(self, config_path: str = "config/platforms.json"):
         with open(config_path, 'r', encoding='utf-8') as f:
@@ -22,8 +23,12 @@ class SearchClient:
         self.searxng_url = self.config['search_engine']['searxng_url']
         self.jina_url = self.config['omnis_court']['jina_reader_url']
     
+    # ==========================================
+    # CORE TOOLS: SEARCH + EXTRACT
+    # ==========================================
+    
     def search_searxng(self, query: str, num_results: int = 80) -> List[Dict]:
-        """ค้นหาด้วย SearXNG (over-fetch)"""
+        """SearXNG over-fetch (Scout)"""
         search_url = f"{self.searxng_url}/search"
         params = {
             'q': query,
@@ -54,7 +59,7 @@ class SearchClient:
             return []
     
     def extract_with_jina(self, url: str) -> Optional[str]:
-        """ดึงเนื้อหาด้วย Jina Reader"""
+        """Jina Reader extract full content (Analyst)"""
         try:
             base_url = self.jina_url.split('?')[0].rstrip('/')
             if not base_url.endswith('/extract'):
@@ -76,7 +81,7 @@ class SearchClient:
             return None
     
     def extract_with_trafilatura(self, url: str) -> Optional[str]:
-        """Fallback: ดึงเนื้อหาด้วย Trafilatura (local)"""
+        """Fallback: Trafilatura"""
         try:
             response = requests.get(url, timeout=10, headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -86,21 +91,24 @@ class SearchClient:
                 return content
             return None
         except Exception as e:
-            print(f"⚠️ Trafilatura error for {url[:50]}: {e}")
+            print(f"⚠️ Trafilatura error: {e}")
             return None
     
     def extract_content(self, url: str) -> Optional[str]:
-        """ดึงเนื้อหา (Jina → Trafilatura fallback)"""
+        """Jina → Trafilatura fallback"""
         content = self.extract_with_jina(url)
         if content:
             return content
-        
-        time.sleep(0.5)
+        time.sleep(0.3)
         return self.extract_with_trafilatura(url)
     
-    def research_queries(self, queries: List[str], max_articles_per_query: int = 3, 
+    # ==========================================
+    # MAIN RESEARCH (ROUND B)
+    # ==========================================
+    
+    def research_queries(self, queries: List[str], max_articles_per_query: int = 3,
                          progress_callback=None) -> str:
-        """ค้นหาและ extract หลาย queries → รวมเป็น Search Report"""
+        """Search + Extract → Search Report"""
         total_queries = len(queries)
         all_articles = []
         seen_urls = set()
@@ -128,10 +136,8 @@ class SearchClient:
                         'word_count': len(content.split())
                     })
                     extracted += 1
-                    
                     if extracted >= max_articles_per_query:
                         break
-                
                 time.sleep(0.3)
             
             if progress_callback:
@@ -140,35 +146,33 @@ class SearchClient:
         report = self._build_search_report(all_articles)
         
         if progress_callback:
-            progress_callback(total_queries, total_queries, 
-                            f"📊 Total: {len(all_articles)} articles, {len(report)} characters")
+            progress_callback(total_queries, total_queries,
+                            f"📊 Total: {len(all_articles)} articles, {len(report)} chars")
         
         return report
     
     def _build_search_report(self, articles: List[Dict]) -> str:
-        """รวมทุกบทความเป็น Search Report"""
+        """Build Search Report"""
         if not articles:
             return "No articles found."
         
         report_lines = [
             "=" * 70,
             "OMNIS-COURT SEARCH REPORT",
-            f"Total articles extracted: {len(articles)}",
-            "=" * 70,
-            ""
+            f"Total articles: {len(articles)}",
+            "=" * 70, ""
         ]
         
         by_query = {}
         for article in articles:
-            query = article['query']
-            if query not in by_query:
-                by_query[query] = []
-            by_query[query].append(article)
+            q = article['query']
+            if q not in by_query:
+                by_query[q] = []
+            by_query[q].append(article)
         
         for query, query_articles in by_query.items():
             report_lines.append(f"\n### Query: {query}")
             report_lines.append("-" * 70)
-            
             for i, article in enumerate(query_articles, 1):
                 report_lines.append(f"\n[{i}] {article['title']}")
                 report_lines.append(f"URL: {article['url']}")
@@ -178,184 +182,332 @@ class SearchClient:
         return "\n".join(report_lines)
     
     # ==========================================
-    # 🆕 PHASE 0: AUTO-DETECT TOURNAMENT
+    # 🆕 TRUE AGENTIC SEARCH EXECUTOR (COMMON HELPER)
     # ==========================================
     
-    def detect_tournament(self, player_a: str, player_b: str, max_retries: int = 5,
-                         progress_callback=None, llm_client=None) -> Optional[Dict]:
+    def _execute_agentic_search(self, queries: List[str],
+                                  extract_all: bool = True,
+                                  progress_callback=None,
+                                  progress_prefix: str = "") -> str:
         """
-        Auto-detect tournament context (5 retry loops)
+        Execute agentic search: SearXNG (over-fetch) → Jina (extract ALL) → Search Report
         
-        Retry Strategy:
-        1. Direct match (English)
-        2. Multilingual (ES/FR/IT/DE/JP)
-        3. Broader player search (current tournament)
-        4. Social/news (Twitter/Instagram/news)
-        5. Tournament calendar (ATP/WTA schedule)
-        
-        Returns: {
-            "tournament": "Roland Garros 2026",
-            "surface": "Clay",
-            "round": "Semi-Final",
-            "court": "Philippe Chatrier",
-            "court_speed": 1.8,
-            "ball": "Dunlop ATP",
-            "weather": {"temp": 22, "humidity": 65, "wind": 5},
-            "confidence": "HIGH/MEDIUM/LOW",
-            "source_urls": [...],
-            "attempt": 2
-        }
+        Args:
+            queries: List of search queries
+            extract_all: If True, extract ALL URLs (not just top N)
+            progress_callback: function(current, total, message)
+            progress_prefix: Prefix for progress messages
         """
-        from llm_client import LLMClient
+        all_articles = []
+        seen_urls = set()
+        total_queries = len(queries)
         
-        if llm_client is None:
-            llm_client = LLMClient()
-        
-        # 5 Retry Loops with different strategies
-        retry_strategies = [
-            {
-                "name": "Direct Match",
-                "queries": [
-                    f"{player_a} vs {player_b} tennis match 2026",
-                    f"{player_a} {player_b} tennis schedule",
-                    f"ATP WTA draw {player_a} {player_b}"
-                ]
-            },
-            {
-                "name": "Multilingual",
-                "queries": [
-                    f"{player_a} {player_b} partido tenis",  # Spanish
-                    f"{player_a} {player_b} match tennis",   # French
-                    f"{player_a} {player_b} テニス 試合"      # Japanese
-                ]
-            },
-            {
-                "name": "Broader Search",
-                "queries": [
-                    f"{player_a} current tournament 2026",
-                    f"{player_b} ATP schedule this week",
-                    f"tennis tournaments {player_a} playing"
-                ]
-            },
-            {
-                "name": "Social & News",
-                "queries": [
-                    f"{player_a} twitter tournament",
-                    f"{player_a} instagram practice",
-                    f"ATP news {player_a} {player_b}"
-                ]
-            },
-            {
-                "name": "Tournament Calendar",
-                "queries": [
-                    "ATP calendar this week 2026",
-                    "WTA tournaments schedule 2026",
-                    f"{player_a} {player_b} head to head recent"
-                ]
-            }
-        ]
-        
-        for attempt in range(min(max_retries, len(retry_strategies))):
-            strategy = retry_strategies[attempt]
-            
+        for i, query in enumerate(queries, 1):
             if progress_callback:
-                progress_callback(attempt + 1, max_retries, 
-                                f"🔄 Attempt {attempt+1}/{max_retries}: {strategy['name']}")
+                progress_callback(i, total_queries * 2,
+                                f"{progress_prefix}🔍 [{i}/{total_queries}] {query[:50]}...")
             
-            # ค้นหาทุก queries ใน strategy
-            all_snippets = []
-            source_urls = []
+            # SearXNG: over-fetch 80 URLs
+            results = self.search_searxng(query, num_results=80)
             
-            for query in strategy['queries']:
-                results = self.search_searxng(query, num_results=15)
-                for r in results:
-                    all_snippets.append({
-                        'title': r['title'],
-                        'snippet': r['snippet'],
-                        'url': r['url']
+            # Filter relevant URLs (skip if too many)
+            urls_to_extract = []
+            for r in results:
+                url = r['url']
+                if url not in seen_urls:
+                    seen_urls.add(url)
+                    urls_to_extract.append((url, r['title']))
+                    if not extract_all and len(urls_to_extract) >= 10:
+                        break
+            
+            # Jina: extract ALL (or top 10)
+            extracted_count = 0
+            for url, title in urls_to_extract:
+                content = self.extract_content(url)
+                if content:
+                    all_articles.append({
+                        'query': query,
+                        'url': url,
+                        'title': title,
+                        'content': content[:5000],  # เก็บเยอะขึ้น
+                        'word_count': len(content.split())
                     })
-                    if r['url'] not in source_urls:
-                        source_urls.append(r['url'])
+                    extracted_count += 1
                 time.sleep(0.3)
             
-            if not all_snippets:
+            if progress_callback:
+                progress_callback(total_queries + i, total_queries * 2,
+                                f"{progress_prefix}✅ [{i}/{total_queries}] extracted {extracted_count} articles")
+        
+        # Build report
+        return self._build_search_report(all_articles)
+    
+    # ==========================================
+    # 🆕 PHASE 0: TRUE AGENTIC TOURNAMENT DETECTION
+    # ==========================================
+    
+    def detect_tournament(self, player_a: str, player_b: str, max_retries: int = 3,
+                         progress_callback=None, llm_client=None) -> Optional[Dict]:
+        """
+        TRUE AGENTIC Tournament Detection
+        
+        Flow: LLM THINK → SearXNG ACT → Jina EXTRACT ALL → LLM OBSERVE → ADAPTIVE RETRY
+        
+        Returns: {
+            "tournament", "surface", "round", "court", "court_speed",
+            "ball", "weather", "confidence", "evidence", "source_urls",
+            "attempt": N, "total_searches": N, "total_articles": N
+        }
+        """
+        from prompt_v7_1 import ROUND_0_PLAN, ROUND_0_OBSERVE, ROUND_0_RETRY
+        
+        if llm_client is None:
+            from llm_client import LLMClient
+            llm_client = LLMClient()
+        
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        previous_feedback = "First attempt - no previous data"
+        previous_strategy = ""
+        total_searches = 0
+        total_articles = 0
+        
+        for attempt in range(1, max_retries + 1):
+            if progress_callback:
+                progress_callback(attempt, max_retries,
+                                f"🧠 Attempt {attempt}/{max_retries}: LLM planning strategy...")
+            
+            # ═══ STEP 1: LLM THINK (Plan Queries) ═══
+            if attempt == 1:
+                plan_prompt = ROUND_0_PLAN.format(
+                    player_a=player_a,
+                    player_b=player_b,
+                    current_date=current_date,
+                    previous_feedback=previous_feedback
+                )
+            else:
+                plan_prompt = ROUND_0_RETRY.format(
+                    player_a=player_a,
+                    player_b=player_b,
+                    attempt_number=attempt,
+                    max_attempts=max_retries,
+                    previous_strategy=previous_strategy,
+                    previous_results="See analysis below",
+                    failure_reason=previous_feedback
+                )
+            
+            plan_response = llm_client.call_qwen(plan_prompt, max_tokens=2000, temperature=0.3)
+            if not plan_response:
                 continue
             
-            # ใช้ LLM วิเคราะห์ snippets เพื่อดึง tournament context
-            analysis = self._llm_analyze_tournament(
-                player_a, player_b, all_snippets, llm_client
+            # Parse LLM plan
+            try:
+                plan_json = json.loads(plan_response)
+            except:
+                json_match = re.search(r'\{.*\}', plan_response, re.DOTALL)
+                if json_match:
+                    try:
+                        plan_json = json.loads(json_match.group())
+                    except:
+                        continue
+                else:
+                    continue
+            
+            queries = plan_json.get('queries', [])
+            if not queries:
+                continue
+            
+            previous_strategy = plan_json.get('reasoning', '') or plan_json.get('new_strategy', '')
+            total_searches += len(queries)
+            
+            # ═══ STEP 2: SearXNG ACT + Jina EXTRACT ALL ═══
+            if progress_callback:
+                progress_callback(attempt, max_retries,
+                                f"🔍 Attempt {attempt}/{max_retries}: Executing {len(queries)} searches + extracting ALL content...")
+            
+            search_report = self._execute_agentic_search(
+                queries,
+                extract_all=True,
+                progress_callback=progress_callback if attempt == max_retries else None,
+                progress_prefix=f"[A{attempt}] "
             )
             
-            if analysis and analysis.get('tournament'):
-                analysis['attempt'] = attempt + 1
-                analysis['source_urls'] = source_urls[:5]  # เก็บแค่ 5 URLs แรก
-                return analysis
+            # นับบทความ
+            article_count = search_report.count("### Query:")
+            total_articles += article_count
+            
+            if len(search_report) < 500:
+                previous_feedback = f"No results found. Queries: {queries[:3]}"
+                continue
+            
+            # ═══ STEP 3: LLM OBSERVE (Analyze + Decide) ═══
+            if progress_callback:
+                progress_callback(attempt, max_retries,
+                                f"🧠 Attempt {attempt}/{max_retries}: LLM analyzing results...")
+            
+            observe_prompt = ROUND_0_OBSERVE.format(
+                player_a=player_a,
+                player_b=player_b,
+                current_date=current_date,
+                search_report=search_report[:25000]  # truncate for context
+            )
+            
+            observe_response = llm_client.call_qwen(observe_prompt, max_tokens=1500, temperature=0.2)
+            if not observe_response:
+                continue
+            
+            # Parse observation
+            try:
+                observation = json.loads(observe_response)
+            except:
+                json_match = re.search(r'\{.*\}', observe_response, re.DOTALL)
+                if json_match:
+                    try:
+                        observation = json.loads(json_match.group())
+                    except:
+                        continue
+                else:
+                    continue
+            
+            # ═══ STEP 4: Decision ═══
+            confidence = observation.get('confidence', 'LOW')
+            tournament = observation.get('tournament')
+            
+            if confidence == 'HIGH' and tournament:
+                # ✅ SUCCESS
+                observation['attempt'] = attempt
+                observation['total_searches'] = total_searches
+                observation['total_articles'] = total_articles
+                return observation
+            elif confidence == 'MEDIUM' and tournament:
+                # ⚠️ Partial success - use it but note low confidence
+                observation['attempt'] = attempt
+                observation['total_searches'] = total_searches
+                observation['total_articles'] = total_articles
+                if attempt == max_retries:
+                    return observation
+                # Otherwise try one more time for HIGH confidence
+                previous_feedback = f"MEDIUM confidence. Evidence: {observation.get('evidence', '')}"
+            else:
+                # ❌ Failed - retry
+                previous_feedback = f"LOW confidence or no tournament. Evidence: {observation.get('evidence', 'None')}"
         
-        # สุดทางแล้ว ไม่เจอ
+        # ❌ Exhausted all retries
         return None
     
-    def _llm_analyze_tournament(self, player_a: str, player_b: str, 
-                                 snippets: List[Dict], llm_client) -> Optional[Dict]:
-        """ใช้ LLM วิเคราะห์ snippets เพื่อดึง tournament context"""
+    # ==========================================
+    # 🆕 FIND UPCOMING MATCH (TEST FEATURE)
+    # ==========================================
+    
+    def find_upcoming_match(self, hours_ahead: int = 2, max_retries: int = 2,
+                            progress_callback=None, llm_client=None) -> Optional[Dict]:
+        """
+        Find tennis matches starting in next N hours
         
-        # รวม snippets เป็น text สั้นๆ (ไม่เกิน 8000 chars)
-        snippets_text = ""
-        for i, s in enumerate(snippets[:20], 1):  # จำกัด 20 snippets
-            snippets_text += f"\n[{i}] {s['title']}\n{s['snippet'][:300]}\n"
-            if len(snippets_text) > 7000:
-                break
+        Returns: {
+            "matches_found": [...],
+            "total_found": N,
+            "best_match": {...} or null,
+            "time_window": "HH:MM - HH:MM",
+            "reasoning": "..."
+        }
+        """
+        from prompt_v7_1 import FIND_UPCOMING_PLAN, FIND_UPCOMING_OBSERVE
         
-        prompt = f"""You are a tennis tournament detective.
-
-Match: {player_a} vs {player_b}
-
-Based on the search snippets below, detect the tournament context:
-
-SNIPPETS:
-{snippets_text}
-
-Return ONLY a JSON object with these fields:
-{{
-  "tournament": "name of tournament (e.g., Roland Garros 2026) or null if not found",
-  "surface": "Clay" or "Hard" or "Grass" or null,
-  "round": "R128/R64/R32/R16/QF/SF/F or null",
-  "court": "court name if found, or null",
-  "court_speed": float (1.0=slow clay, 2.5=medium hard, 3.8=fast grass) or null,
-  "ball": "ball brand (Dunlop/Penn/Slazenger/Head) or null",
-  "weather": {{"temp": int celsius, "humidity": int percent, "wind": int km/h}} or null,
-  "confidence": "HIGH" or "MEDIUM" or "LOW",
-  "evidence": "brief 1-sentence reason for your answer"
-}}
-
-Rules:
-- If tournament is clearly found, set confidence to HIGH
-- If partially found (e.g., tournament name but no round), set MEDIUM
-- If only guessing, set LOW and set tournament to null
-- Use realistic court_speed values: Roland Garros = 1.8, Wimbledon = 3.8, US Open = 2.9
-- Return ONLY JSON, no markdown, no explanations
-"""
+        if llm_client is None:
+            from llm_client import LLMClient
+            llm_client = LLMClient()
         
-        response = llm_client.call_qwen(prompt, max_tokens=1000, temperature=0.2)
-        if not response:
-            return None
+        now = datetime.now()
+        current_datetime = now.strftime("%Y-%m-%d %H:%M:%S")
+        future = now + timedelta(hours=hours_ahead)
+        time_window = f"{now.strftime('%H:%M')} - {future.strftime('%H:%M')}"
+        timezone = "Local"
         
-        # Parse JSON
-        try:
-            result = json.loads(response)
-            if isinstance(result, dict):
-                # กรอง null values ออก
-                return {k: v for k, v in result.items() if v is not None and v != {}}
-        except:
-            pass
-        
-        # Fallback: extract JSON
-        json_match = re.search(r'\{.*\}', response, re.DOTALL)
-        if json_match:
+        for attempt in range(1, max_retries + 1):
+            if progress_callback:
+                progress_callback(attempt, max_retries,
+                                f"🧠 Attempt {attempt}/{max_retries}: Planning search for upcoming matches...")
+            
+            # STEP 1: LLM PLAN
+            plan_prompt = FIND_UPCOMING_PLAN.format(
+                current_datetime=current_datetime,
+                timezone=timezone
+            )
+            
+            plan_response = llm_client.call_qwen(plan_prompt, max_tokens=1500, temperature=0.3)
+            if not plan_response:
+                continue
+            
             try:
-                result = json.loads(json_match.group())
-                if isinstance(result, dict):
-                    return {k: v for k, v in result.items() if v is not None and v != {}}
+                plan_json = json.loads(plan_response)
             except:
-                pass
+                json_match = re.search(r'\{.*\}', plan_response, re.DOTALL)
+                if json_match:
+                    try:
+                        plan_json = json.loads(json_match.group())
+                    except:
+                        continue
+                else:
+                    continue
+            
+            queries = plan_json.get('queries', [])
+            if not queries:
+                continue
+            
+            # STEP 2: EXECUTE SEARCH
+            if progress_callback:
+                progress_callback(attempt, max_retries,
+                                f"🔍 Attempt {attempt}/{max_retries}: Searching {len(queries)} queries...")
+            
+            search_report = self._execute_agentic_search(
+                queries,
+                extract_all=True,
+                progress_callback=progress_callback if attempt == max_retries else None,
+                progress_prefix=f"[Find] "
+            )
+            
+            if len(search_report) < 500:
+                continue
+            
+            # STEP 3: LLM OBSERVE
+            if progress_callback:
+                progress_callback(attempt, max_retries,
+                                f"🧠 Attempt {attempt}/{max_retries}: LLM finding matches...")
+            
+            observe_prompt = FIND_UPCOMING_OBSERVE.format(
+                current_datetime=current_datetime,
+                timezone=timezone,
+                search_report=search_report[:25000]
+            )
+            
+            observe_response = llm_client.call_qwen(observe_prompt, max_tokens=2000, temperature=0.2)
+            if not observe_response:
+                continue
+            
+            try:
+                observation = json.loads(observe_response)
+            except:
+                json_match = re.search(r'\{.*\}', observe_response, re.DOTALL)
+                if json_match:
+                    try:
+                        observation = json.loads(json_match.group())
+                    except:
+                        continue
+                else:
+                    continue
+            
+            # Check if found
+            if observation.get('best_match') and observation.get('total_found', 0) > 0:
+                observation['attempt'] = attempt
+                observation['time_window'] = time_window
+                return observation
         
-        return None
+        # Not found
+        return {
+            "matches_found": [],
+            "total_found": 0,
+            "best_match": None,
+            "time_window": time_window,
+            "reasoning": "No matches found in the specified time window",
+            "attempt": max_retries
+        }
