@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import requests
 import json
 import time
@@ -9,7 +10,8 @@ from monte_carlo import MonteCarloExecutor
 from orchestrator import Orchestrator
 
 # ==========================================
-# OMNIS-COURT DASHBOARD v4.3 (Phase 0 + Queue System)
+# OMNIS-COURT DASHBOARD v4.4
+# Features: LocalStorage + Find Upcoming Match + True Agentic
 # ==========================================
 
 st.set_page_config(
@@ -19,6 +21,47 @@ st.set_page_config(
 )
 
 st.title("🎾 OMNIS-COURT Command Center")
+
+# ==========================================
+# LOCALSTORAGE HELPER
+# ==========================================
+def load_from_localstorage():
+    """Load state from browser LocalStorage"""
+    html = """
+    <script>
+    const state = {
+        analysis_queue: JSON.parse(localStorage.getItem('omnis_queue') || '[]'),
+        analysis_results: JSON.parse(localStorage.getItem('omnis_results') || '[]'),
+    };
+    window.parent.postMessage({
+        type: 'streamlit:render',
+        data: state
+    }, '*');
+    </script>
+    """
+    # ใช้ simple approach: read from URL params / state
+    # เนื่องจาก streamlit ไม่มี native localStorage, ใช้ session_state เป็นหลัก
+    # แล้ว save ลง localStorage ผ่าน JS เมื่อ state เปลี่ยน
+    pass
+
+def save_to_localstorage(key, value):
+    """Save to browser LocalStorage"""
+    json_value = json.dumps(value, default=str)
+    components.html(f"""
+    <script>
+    localStorage.setItem('omnis_{key}', {json.dumps(json_value)});
+    </script>
+    """, height=0)
+
+def clear_localstorage():
+    """Clear all LocalStorage"""
+    components.html("""
+    <script>
+    localStorage.removeItem('omnis_queue');
+    localStorage.removeItem('omnis_results');
+    alert('✅ LocalStorage cleared! Refresh page.');
+    </script>
+    """, height=0)
 
 # ==========================================
 # INITIALIZE SESSION STATE
@@ -35,13 +78,20 @@ if 'current_analysis' not in st.session_state:
 if 'current_progress' not in st.session_state:
     st.session_state.current_progress = {"round": "", "message": ""}
 
-# 🆕 Phase 0 State
 if 'phase_0_state' not in st.session_state:
-    # States: 'idle' | 'detecting' | 'confirm' | 'editing' | 'analyzing'
     st.session_state.phase_0_state = 'idle'
 
 if 'phase_0_data' not in st.session_state:
     st.session_state.phase_0_data = None
+
+if 'find_upcoming_result' not in st.session_state:
+    st.session_state.find_upcoming_result = None
+
+# ==========================================
+# AUTO-SAVE TO LOCALSTORAGE (ทุก rerun)
+# ==========================================
+save_to_localstorage('queue', st.session_state.analysis_queue)
+save_to_localstorage('results', st.session_state.analysis_results)
 
 # ==========================================
 # LOAD CONFIG
@@ -110,7 +160,7 @@ with st.form("add_match_form"):
     with col1:
         player_a = st.text_input("🎾 Player A", placeholder="e.g., Alcaraz")
         player_b = st.text_input("🎾 Player B", placeholder="e.g., Sinner")
-        tournament = st.text_input("🏆 Tournament (optional - auto-detect)", 
+        tournament = st.text_input("🏆 Tournament (optional - auto-detect)",
                                    placeholder="e.g., US Open 2026")
     
     with col2:
@@ -124,17 +174,11 @@ with st.form("add_match_form"):
     col_btn1, col_btn2 = st.columns(2)
     
     with col_btn1:
-        skip_queue = st.form_submit_button(
-            "⚡ ลัดคิว (Analyze Now)", 
-            type="primary", 
-            use_container_width=True
-        )
+        skip_queue = st.form_submit_button("⚡ ลัดคิว (Analyze Now)",
+                                          type="primary", use_container_width=True)
     
     with col_btn2:
-        add_to_queue = st.form_submit_button(
-            "➕ เพิ่มคิว", 
-            use_container_width=True
-        )
+        add_to_queue = st.form_submit_button("➕ เพิ่มคิว", use_container_width=True)
 
 if skip_queue or add_to_queue:
     if not player_a or not player_b:
@@ -148,15 +192,14 @@ if skip_queue or add_to_queue:
             "hc_line_a": hc_line_a,
             "hc_line_b": hc_line_b,
             "ou_line": ou_line,
-            "match_time": match_time,
-            "added_at": datetime.now()
+            "match_time": match_time.isoformat() if isinstance(match_time, datetime) else match_time,
+            "added_at": datetime.now().isoformat()
         }
         
         if skip_queue:
             st.session_state.current_analysis = match_info
             st.session_state.phase_0_state = 'detecting'
             st.rerun()
-        
         elif add_to_queue:
             st.session_state.analysis_queue.append(match_info)
             st.session_state.analysis_queue.sort(key=lambda x: x['match_time'])
@@ -179,7 +222,13 @@ if st.session_state.analysis_queue:
                 st.caption(match['tournament'])
         
         with col2:
-            st.caption(f"⏰ {match['match_time'].strftime('%H:%M %d/%m')}")
+            mt = match['match_time']
+            if isinstance(mt, str):
+                try:
+                    mt = datetime.fromisoformat(mt)
+                except:
+                    pass
+            st.caption(f"⏰ {mt.strftime('%H:%M %d/%m') if isinstance(mt, datetime) else mt}")
         
         with col3:
             st.caption(f"HC: {match['hc_line_a']}/{match['hc_line_b']} | O/U: {match['ou_line']}")
@@ -200,7 +249,7 @@ else:
     st.info("💡 คิวว่าง - เพิ่มแมตช์ด้านบน")
 
 # ==========================================
-# 🎯 PHASE 0 + CURRENT ANALYSIS (State Machine)
+# 🎯 PHASE 0 + CURRENT ANALYSIS
 # ==========================================
 if st.session_state.current_analysis:
     st.markdown("---")
@@ -212,18 +261,20 @@ if st.session_state.current_analysis:
     with col1:
         st.metric("🎾 Match", f"{match['player_a']} vs {match['player_b']}")
     with col2:
-        st.metric("⏰ Time", match['match_time'].strftime('%H:%M'))
+        mt = match['match_time']
+        if isinstance(mt, str):
+            try:
+                mt = datetime.fromisoformat(mt)
+            except:
+                pass
+        st.metric("⏰ Time", mt.strftime('%H:%M') if isinstance(mt, datetime) else mt)
     with col3:
         st.metric("📊 Lines", f"HC: {match['hc_line_a']} | O/U: {match['ou_line']}")
     
-    # ==========================================
-    # PHASE 0 STATE MACHINE
-    # ==========================================
-    
-    # STATE 1: DETECTING (Auto-detect Tournament)
+    # ═══ STATE 1: DETECTING ═══
     if st.session_state.phase_0_state == 'detecting':
-        st.markdown("### 🔍 Phase 0: Auto-Detect Tournament")
-        st.info("⏳ กำลังค้นหา tournament context (5 retry loops)...")
+        st.markdown("### 🔍 Phase 0: True Agentic Tournament Detection")
+        st.info("⏳ LLM วางแผน → SearXNG ค้นหา → Jina extract ALL → LLM ตัดสินใจ")
         
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -237,7 +288,7 @@ if st.session_state.current_analysis:
             detected = search_client.detect_tournament(
                 player_a=match['player_a'],
                 player_b=match['player_b'],
-                max_retries=5,
+                max_retries=3,
                 progress_callback=detect_progress,
                 llm_client=LLMClient()
             )
@@ -249,26 +300,26 @@ if st.session_state.current_analysis:
                 st.session_state.phase_0_state = 'confirm'
                 st.rerun()
             else:
-                # ไม่เจอเลย → ไป manual fallback
                 st.session_state.phase_0_data = None
                 st.session_state.phase_0_state = 'editing'
                 st.rerun()
                 
         except Exception as e:
             st.error(f"❌ Detection error: {e}")
+            import traceback
+            st.code(traceback.format_exc())
             st.session_state.phase_0_state = 'editing'
             st.rerun()
     
-    # STATE 2: CONFIRM (แสดง detected context + 3 buttons)
+    # ═══ STATE 2: CONFIRM ═══
     elif st.session_state.phase_0_state == 'confirm' and st.session_state.phase_0_data:
-        st.markdown("### 🤖 Auto-Detected Match Context")
+        st.markdown("### 🤖 Auto-Detected Match Context (True Agentic)")
         
         data = st.session_state.phase_0_data
         
         col_c1, col_c2 = st.columns([3, 1])
         
         with col_c1:
-            # แสดงข้อมูลแบบสวยงาม
             st.markdown(f"""
             | Field | Value |
             |-------|-------|
@@ -280,22 +331,21 @@ if st.session_state.current_analysis:
             | 🎾 **Ball** | {data.get('ball', 'Unknown')} |
             | 🌡️ **Weather** | {data.get('weather', {})} |
             | 🎲 **Confidence** | **{data.get('confidence', 'LOW')}** |
+            | 🔍 **Searches** | {data.get('total_searches', 0)} queries |
+            | 📄 **Articles** | {data.get('total_articles', 0)} articles |
             """)
             
-            # Confidence indicator
             conf = data.get('confidence', 'LOW')
             if conf == 'HIGH':
-                st.success(f"✅ **HIGH Confidence** (Attempt {data.get('attempt', 0)}/5)")
+                st.success(f"✅ **HIGH Confidence** (Attempt {data.get('attempt', 0)}/3)")
             elif conf == 'MEDIUM':
-                st.warning(f"⚠️ **MEDIUM Confidence** - Please verify (Attempt {data.get('attempt', 0)}/5)")
+                st.warning(f"⚠️ **MEDIUM Confidence** (Attempt {data.get('attempt', 0)}/3)")
             else:
-                st.error(f"❌ **LOW Confidence** - Recommend manual check (Attempt {data.get('attempt', 0)}/5)")
+                st.error(f"❌ **LOW Confidence** (Attempt {data.get('attempt', 0)}/3)")
             
-            # Evidence
             if data.get('evidence'):
                 st.info(f"📝 **Evidence:** {data['evidence']}")
             
-            # Source URLs
             source_urls = data.get('source_urls', [])
             if source_urls:
                 with st.expander(f"🔗 Source URLs ({len(source_urls)})"):
@@ -306,7 +356,6 @@ if st.session_state.current_analysis:
             st.markdown("### Actions:")
             
             if st.button("✅ ยืนยัน", type="primary", use_container_width=True, key="confirm_yes"):
-                # Enrich match_info with detected data
                 match['tournament'] = data.get('tournament') or 'Unknown'
                 match['surface'] = data.get('surface') or 'Hard'
                 match['round'] = data.get('round', 'Unknown')
@@ -329,7 +378,7 @@ if st.session_state.current_analysis:
                 st.session_state.phase_0_state = 'analyzing'
                 st.rerun()
     
-    # STATE 3: EDITING (Manual fallback form)
+    # ═══ STATE 3: EDITING ═══
     elif st.session_state.phase_0_state == 'editing':
         st.markdown("### ✏️ Manual Tournament Input")
         
@@ -344,58 +393,42 @@ if st.session_state.current_analysis:
             col_m1, col_m2 = st.columns(2)
             
             with col_m1:
-                manual_tournament = st.text_input(
-                    "🏆 Tournament", 
-                    value=data.get('tournament', ''),
-                    placeholder="e.g., Roland Garros 2026"
-                )
+                manual_tournament = st.text_input("🏆 Tournament",
+                                                 value=data.get('tournament', ''),
+                                                 placeholder="e.g., Roland Garros 2026")
                 
-                manual_surface = st.selectbox(
-                    "🎨 Surface",
-                    options=["Hard", "Clay", "Grass"],
-                    index=["Hard", "Clay", "Grass"].index(data.get('surface', 'Hard')) if data.get('surface') in ["Hard", "Clay", "Grass"] else 0
-                )
+                manual_surface = st.selectbox("🎨 Surface",
+                                             options=["Hard", "Clay", "Grass"],
+                                             index=["Hard", "Clay", "Grass"].index(data.get('surface', 'Hard')) if data.get('surface') in ["Hard", "Clay", "Grass"] else 0)
                 
-                manual_round = st.text_input(
-                    "🎯 Round",
-                    value=data.get('round', ''),
-                    placeholder="e.g., Semi-Final, R16"
-                )
+                manual_round = st.text_input("🎯 Round",
+                                            value=data.get('round', ''),
+                                            placeholder="e.g., Semi-Final, R16")
             
             with col_m2:
-                manual_court = st.text_input(
-                    "🏟️ Court Name",
-                    value=data.get('court', ''),
-                    placeholder="e.g., Philippe Chatrier"
-                )
+                manual_court = st.text_input("🏟️ Court Name",
+                                            value=data.get('court', ''),
+                                            placeholder="e.g., Philippe Chatrier")
                 
-                manual_speed = st.number_input(
-                    "⚡ Court Speed (1.0-4.0)",
-                    min_value=1.0, max_value=4.0,
-                    value=float(data.get('court_speed', 2.5)) if data.get('court_speed') else 2.5,
-                    step=0.1
-                )
+                manual_speed = st.number_input("⚡ Court Speed (1.0-4.0)",
+                                              min_value=1.0, max_value=4.0,
+                                              value=float(data.get('court_speed', 2.5)) if data.get('court_speed') else 2.5,
+                                              step=0.1)
                 
-                manual_ball = st.text_input(
-                    "🎾 Ball Brand",
-                    value=data.get('ball', ''),
-                    placeholder="e.g., Dunlop ATP"
-                )
+                manual_ball = st.text_input("🎾 Ball Brand",
+                                           value=data.get('ball', ''),
+                                           placeholder="e.g., Dunlop ATP")
             
             col_mbtn1, col_mbtn2 = st.columns(2)
             
             with col_mbtn1:
-                submit_manual = st.form_submit_button(
-                    "✅ ยืนยันข้อมูล",
-                    type="primary",
-                    use_container_width=True
-                )
+                submit_manual = st.form_submit_button("✅ ยืนยันข้อมูล",
+                                                     type="primary",
+                                                     use_container_width=True)
             
             with col_mbtn2:
-                retry_detect = st.form_submit_button(
-                    "🔄 ลอง Auto-Detect อีกครั้ง",
-                    use_container_width=True
-                )
+                retry_detect = st.form_submit_button("🔄 ลอง Auto-Detect อีกครั้ง",
+                                                    use_container_width=True)
         
         if submit_manual:
             match['tournament'] = manual_tournament or 'Unknown Tournament'
@@ -412,11 +445,10 @@ if st.session_state.current_analysis:
             st.session_state.phase_0_state = 'detecting'
             st.rerun()
     
-    # STATE 4: ANALYZING (Run Round A-E)
+    # ═══ STATE 4: ANALYZING ═══
     elif st.session_state.phase_0_state == 'analyzing':
-        st.markdown("### 🧠 Running Analysis Pipeline (5 Rounds)")
+        st.markdown("### 🧠 Running Analysis Pipeline (True Agentic)")
         
-        # แสดง context ที่ใช้
         st.info(f"""
         **Using Context:**
         - 🏆 {match.get('tournament', 'Unknown')}
@@ -445,9 +477,9 @@ if st.session_state.current_analysis:
             orchestrator = Orchestrator()
             with st.spinner("🧠 Running analysis pipeline..."):
                 verdict = orchestrator.analyze_match(
-                    match, 
+                    match,
                     progress_callback=progress_callback,
-                    skip_tournament_detection=True  # ทำ Phase 0 ไปแล้ว
+                    skip_tournament_detection=True
                 )
             
             progress_bar.progress(1.0)
@@ -457,15 +489,13 @@ if st.session_state.current_analysis:
                 st.session_state.analysis_results.append({
                     'match_info': match,
                     'verdict': verdict,
-                    'completed_at': datetime.now()
+                    'completed_at': datetime.now().isoformat()
                 })
                 
-                # Reset state
                 st.session_state.current_analysis = None
                 st.session_state.phase_0_state = 'idle'
                 st.session_state.phase_0_data = None
                 
-                # ดึงแมตช์ถัดไปจากคิว (ถ้ามี)
                 if st.session_state.analysis_queue:
                     st.session_state.current_analysis = st.session_state.analysis_queue.pop(0)
                     st.session_state.phase_0_state = 'detecting'
@@ -494,7 +524,14 @@ if st.session_state.analysis_results:
         match = result['match_info']
         verdict = result['verdict']
         
-        with st.expander(f"**{match['player_a']} vs {match['player_b']}** — {result['completed_at'].strftime('%H:%M %d/%m')}"):
+        completed_at = result['completed_at']
+        if isinstance(completed_at, str):
+            try:
+                completed_at = datetime.fromisoformat(completed_at)
+            except:
+                pass
+        
+        with st.expander(f"**{match['player_a']} vs {match['player_b']}** — {completed_at.strftime('%H:%M %d/%m') if isinstance(completed_at, datetime) else completed_at}"):
             col1, col2, col3 = st.columns(3)
             
             with col1:
@@ -503,6 +540,11 @@ if st.session_state.analysis_results:
                 st.metric("🏆 Tournament", match.get('tournament', 'Unknown'))
             with col3:
                 st.metric("🎨 Surface", match.get('surface', 'Unknown'))
+            
+            # Show reasoning (Chain-of-Thought)
+            if verdict.get('_metadata', {}).get('reasoning'):
+                with st.expander("🧠 LLM Reasoning (Chain-of-Thought)"):
+                    st.markdown(verdict['_metadata']['reasoning'])
             
             apex = verdict.get('apex_pick', {})
             if apex:
@@ -541,9 +583,78 @@ if st.session_state.analysis_results:
                 st.json(verdict)
 
 # ==========================================
-# 🧪 QUICK TESTS
+# 🧪 TEST: FIND UPCOMING MATCH (ปุ่มเดียว)
 # ==========================================
-with st.expander("🧪 Quick Tests (Debug)"):
+st.markdown("---")
+st.subheader("🧪 System Test: Find Upcoming Match")
+
+st.markdown("""
+ปุ่มนี้จะทดสอบว่า **LLM Team** ทำงานได้ถูกต้องหรือไม่:
+- 🧠 LLM คิดว่าจะหาแมตช์ยังไง
+- 🔍 SearXNG over-fetch URLs
+- 📖 Jina extract **ALL** content
+- 🧠 LLM วิเคราะห์หาแมตช์ที่จะแข่งใน 2 ชม. ข้างหน้า
+""")
+
+col_test1, col_test2 = st.columns([1, 3])
+
+with col_test1:
+    if st.button("🔍 Find Upcoming Match (Next 2 Hours)", type="primary"):
+        with st.spinner("🧠 LLM Team กำลังทำงาน..."):
+            try:
+                search_client = SearchClient()
+                
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                def test_progress(current, total, message):
+                    progress_bar.progress(current / total)
+                    status_text.markdown(f"**{message}**")
+                
+                result = search_client.find_upcoming_match(
+                    hours_ahead=2,
+                    max_retries=2,
+                    progress_callback=test_progress,
+                    llm_client=LLMClient()
+                )
+                
+                progress_bar.progress(1.0)
+                st.session_state.find_upcoming_result = result
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
+                import traceback
+                st.code(traceback.format_exc())
+
+with col_test2:
+    if st.session_state.find_upcoming_result:
+        result = st.session_state.find_upcoming_result
+        
+        if result.get('best_match'):
+            best = result['best_match']
+            st.success(f"✅ **พบ {result.get('total_found', 0)} แมตช์! Best match:**")
+            st.markdown(f"""
+            - 🎾 **{best.get('player_a')}** vs **{best.get('player_b')}**
+            - 🏆 {best.get('tournament', 'Unknown')}
+            - 🎨 {best.get('surface', 'Unknown')} | 🎯 {best.get('round', 'Unknown')}
+            - ⏰ {best.get('scheduled_time', 'N/A')}
+            - 🏟️ {best.get('court', 'Unknown')}
+            - 🔗 [Source]({best.get('source_url', '#')})
+            """)
+        else:
+            st.warning(f"⚠️ ไม่พบแมตช์ใน window {result.get('time_window', 'N/A')}")
+            if result.get('reasoning'):
+                st.info(result['reasoning'])
+        
+        if st.button("🗑️ Clear Test Result"):
+            st.session_state.find_upcoming_result = None
+            st.rerun()
+
+# ==========================================
+# 🧪 DEBUG TESTS
+# ==========================================
+with st.expander("🧪 Debug Tests"):
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -569,25 +680,18 @@ with st.expander("🧪 Quick Tests (Debug)"):
                 st.error(f"❌ {str(e)[:50]}")
     
     with col3:
-        if st.button("🎾 Test Tournament Detection"):
-            with st.spinner("Testing auto-detect..."):
-                try:
-                    search_client = SearchClient()
-                    result = search_client.detect_tournament(
-                        "Alcaraz", "Sinner", max_retries=2,
-                        llm_client=LLMClient()
-                    )
-                    if result:
-                        st.success("✅ Detection worked!")
-                        st.json(result)
-                    else:
-                        st.warning("⚠️ No tournament found")
-                except Exception as e:
-                    st.error(f"❌ {str(e)}")
+        if st.button("🗑️ Clear LocalStorage", type="secondary"):
+            st.session_state.analysis_queue = []
+            st.session_state.analysis_results = []
+            st.session_state.current_analysis = None
+            st.session_state.phase_0_state = 'idle'
+            clear_localstorage()
+            st.rerun()
 
 # ==========================================
 # FOOTER
 # ==========================================
 st.markdown("---")
-st.caption("OMNIS-COURT v7.1 | Phase 0 Auto-Detect + Queue System | v4.3")
+st.caption("OMNIS-COURT v7.1 | True Agentic + LocalStorage | v4.4")
 st.caption(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+st.caption(f"💾 Auto-saved to browser | Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
