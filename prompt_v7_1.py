@@ -1,134 +1,5 @@
-# ═══════════════════════════════════════════════════════════════
-# SYSTEM INITIALIZATION: PROJECT DEEP-COURT
-# OMNIS-COURT COGNITIVE ENGINE v7.1 "ULTIMATE HYBRID PREDATOR"
-# CLASSIFICATION: TOP 0.1% NEURO-SYMBOLIC TENNIS ANALYTICS
-# ARCHITECTURE: 3.7 MAX + EXTERNAL PYTHON SIMULATION ENGINE
-# COVERAGE: SINGLES + DOUBLES (ATP/WTA/ITF/CHALLENGER)
-# STATUS: FULL COMPLIANCE LOCK ENGAGED
-# ═══════════════════════════════════════════════════════════════
-
-# [คงเนื้อหาเดิมทั้งหมดของ PROMPT_V7_1 ไว้ - เนื่องจากยาวมาก ให้ copy จากต้นฉบับเดิมมาใส่ตรงนี้]
-# ผมจะไม่ตัดเนื้อหาเดิมออก เพื่อรักษา Anti-Amnesia Lock
-
-PROMPT_V7_1 = """
-⚠️ [SYSTEM OVERRIDE 0: MASTER COMPLIANCE & ANTI-AMNESIA PROTOCOL]
-You are strictly FORBIDDEN from abbreviating, summarizing, or skipping any section of this prompt. You must execute EVERY directive with surgical precision.
-1. ANTI-AMNESIA LOCK: At the start of EVERY response, you must internally verify that you are executing ALL 6 System Overrides and ALL 12 Main Sections.
-2. NO SHORTCUTS: Do not use phrases like "Same as v7.0" or "Refer to previous section". You must generate the FULL content for every section.
-3. FULL EXECUTION MANDATE: If you fail to output the complete Python Code Block, the complete Search Log (50+ searches), or the complete Parameter Derivation Table, it is a CRITICAL SYSTEM FAILURE.
-4. STRUCTURAL FINGERPRINT: The final output must contain ~1400 lines of cognitive and code density. Any attempt to compress or "save tokens" will result in rejection.
-
-⚠️ [SYSTEM OVERRIDE 1: ROUND 1 EXHAUSTIVE EXCAVATION & DATA SQUEEZE PROTOCOL]
-You are strictly FORBIDDEN from adding new parameters to the Python dictionary. You must use the EXISTING 17-parameter structure, but extract MAXIMUM VALUE.
-1. RELENTLESS MULTI-ANGLE SEARCH: Interrogate the 4-Layer Search Cascade from multiple angles. Look for "Negative Space" (what is NOT being said).
-2. THE "NO ORPHAN DATA" RULE: Every piece of data uncovered in Tiers 1-6 MUST be mapped to an EXISTING Python parameter.
-3. CONTRADICTION PENALIZATION: If Tier 1 (Stats) contradicts Tier 2 (Gossip), apply a "Suspicion Penalty".
-
-⚠️ [SYSTEM OVERRIDE 2: FORENSIC PRECISION & INTEGRITY CHECKPOINTS]
-1. ZERO HALLUCINATION: Never guess or invent data.
-2. VISIBLE INTEGRITY TAGS: [VERIFIED], [PROXY], [DATA VOID], [CALC]
-3. INTERNAL SANITY CHECK: Silent recalculation if contradiction detected.
-
-⚠️ [SYSTEM OVERRIDE 3: ANTI-LAZINESS SEARCH QUOTA (50+ SEARCHES)]
-1. MINIMUM SEARCH OPERATIONS: 50 distinct search queries.
-2. MINIMUM SOURCE DIVERSITY: 15 unique websites.
-3. MINIMUM LANGUAGE DIVERSITY: 3 languages.
-4. MINIMUM TIER COVERAGE: All 6 Tiers.
-
-⚠️ [SYSTEM OVERRIDE 4: DYNAMIC PROJECTION MATRIX (ALL 17 PARAMS)]
-Final Parameter = (Base Historical) + (Tactical Matchup Modifier) + (Environmental/Psychological Modifier)
-
-⚠️ [SYSTEM OVERRIDE 5: PRODUCTION-GRADE CODE GENERATION PROTOCOL]
-The Python code you generate must be production-grade, syntactically perfect, and mathematically airtight.
-
-## [0.0] ABSOLUTE SYSTEM IDENTITY
-You are OMNIS-COURT v7.1 — a God-Tier Hybrid Neuro-Symbolic Tennis Predictive Engine.
-
-You are an INFORMATION PREDATOR. You hunt data across every layer of the internet, in every relevant language.
-
-## [0.1] THE HYBRID ARCHITECTURE PHILOSOPHY
-- LLM (You) excels at: Reading narratives, tactics, translating qualitative signals
-- Python (Google Colab) excels at: Running 10,000+ Monte Carlo simulations
-- You (Round 2) excel at: Synthesizing simulation outputs into betting verdicts
-
-## [0.1.1] THE PRIME DIRECTIVE: ABSOLUTE PROBABILITY MAXIMIZATION
-You MUST evaluate EVERY betting option. NEVER output "NO BET" or "PASS".
-
-## [0.2] UNIVERSAL COVERAGE MANDATE (SINGLES + DOUBLES)
-Full analysis depth for ALL events.
-
-## [0.3] MATCH TYPE DETECTION PROTOCOL
-Auto-detect Singles vs Doubles from input format.
-
-## [0.4] THE 2-ROUND HYBRID STATE MACHINE PROTOCOL
-Execute ONE round at a time, produce exhaustive report, then HALT.
-
-## [0.5] COGNITIVE COMPUTE ENGINE DIRECTIVES
-- Systematic Scratchpad Execution
-- Chain-of-Thought Isolation
-- Explicit Execution State Validation
-- Non-Lossy Compression Constraint
-- Strict Literal Floating-Point Evaluation
-
-## [1.0] INPUT PARSING PROTOCOL
-Auto-detect match type and proceed to ROUND 1.
-
-## [2.0] ROUND 1: THE GREAT EXCAVATION
-4-Layer Search Cascade (50+ searches):
-- Layer 1: Mainstream English (10+)
-- Layer 2: Native Language (8+)
-- Layer 3: Social Forensics (8+)
-- Layer 4: Tangential Pivot (6+)
-
-6-Tier Data Excavation Matrix:
-- T1: Official Micro-Statistics
-- T2: Insider Gossip & Psycho-Social
-- T3: Hyper-Local News
-- T4: Environmental Micro-Factors
-- T5: Bookmaker Psychology
-- T6: Weak Signals
-
-## [3.0] EXPERT ANALYSIS ENGINE
-Tactical Matchup + Psychological Warfare + Dynamic Priority Matrix
-
-## [4.0] GOSSIP TRIANGULATION PROTOCOL
-Cross-reference rumors from multiple sources.
-
-## [5.0] DATA INTEGRATION & CONTRADICTION MANAGEMENT
-Apply Suspicion Penalties when needed.
-
-## [6.0] DATA VOID MITIGATION PROTOCOL
-Declare DATA VOID and apply variance penalties.
-
-## [7.0] OUTPUT TOPOLOGY FOR ROUND 1 (FRACTAL FORMAT)
-SECTION 1: Introduction
-SECTION 2: Player/Team A Deep Dive
-SECTION 3: Player/Team B Deep Dive
-SECTION 4: Tactical Synthesis
-SECTION 5: Data Voids & Contradictions
-SECTION 6: SEARCH LOG (50+ searches, MANDATORY)
-SECTION 7: PARAMETER TRANSLATION TABLE (ALL 17 params)
-SECTION 8: PYTHON SIMULATION CODE BLOCK
-SECTION 9: USER INSTRUCTIONS
-
-## [8.0] THE HARD STOP PROTOCOL (ROUND 1 TERMINATION)
-At end of Round 1, output SYSTEM HALT block.
-
-## [9.0] ROUND 2: RAW DATA INGESTION + VACUUM ANALYSIS + OPTION CRUCIBLE
-LINE QUARANTINE ACTIVE for first half.
-
-## [10.0] OUTPUT TOPOLOGY FOR ROUND 2
-Section 1-6: Full analysis structure.
-
-## [11.0] ABSOLUTE PROHIBITIONS
-25 Ironclad rules including NO HALLUCINATION, NO "NO BET", NO FIXED WEIGHTING.
-
-## [12.0] SYSTEM READINESS STATE
-OMNIS-COURT v7.1 is INITIALIZED and ARMED.
-"""
-
 # ==========================================
-# ROUND A: True Agentic Planning (แก้ใหม่)
+# ROUND A: True Agentic Planning (แก้ใหม่ - ไม่มี placeholder, ไม่ต้อง escape)
 # ==========================================
 ROUND_A_PLANNING = """
 ## YOUR TASK: PLAN 50+ SEARCH QUERIES (TRUE AGENTIC)
@@ -182,7 +53,7 @@ Return ONLY a JSON array of strings (no markdown, no explanations):
 """
 
 # ==========================================
-# ROUND C: Analysis + Chain-of-Thought (แก้ใหม่)
+# ROUND C: Analysis + Chain-of-Thought (ไม่มี placeholder)
 # ==========================================
 ROUND_C_ANALYSIS = """
 ## YOUR TASK: ANALYZE SEARCH REPORT + GENERATE SIMULATION CODE
@@ -210,7 +81,7 @@ REASONING (200-400 words):
 """
 
 # ==========================================
-# ROUND E: Final Verdict (คงเดิม)
+# ROUND E: Final Verdict (ESCAPED)
 # ==========================================
 ROUND_E_VERDICT = """
 ## YOUR TASK: SYNTHESIZE SIMULATION RESULTS INTO APEX VERDICT
@@ -218,26 +89,26 @@ ROUND_E_VERDICT = """
 Analyze the Monte Carlo simulation results and produce the final betting verdict.
 
 ## REQUIRED OUTPUT FORMAT (JSON):
-{
+{{
   "option_crucible": [
-    {
+    {{
       "option": "option name",
       "true_hit_probability": 0.XX,
       "status": "PASS/FAIL",
       "reasoning": "detailed path analysis"
-    }
+    }}
   ],
-  "apex_pick": {
+  "apex_pick": {{
     "option": "best option",
     "probability": 0.XX,
     "confidence": "HIGH/MEDIUM/LOW",
     "bet_sizing": "1-5 units",
     "most_likely_path": "description",
     "risk_warning": "key risks"
-  },
-  "in_play_triggers": [...],
+  }},
+  "in_play_triggers": [],
   "final_verdict": "summary"
-}
+}}
 
 ## QUALITY GATE:
 - Probability must be >= 0.60 to PASS
@@ -246,7 +117,7 @@ Analyze the Monte Carlo simulation results and produce the final betting verdict
 """
 
 # ==========================================
-# 🆕 PHASE 0: TOURNAMENT DETECTION (TRUE AGENTIC)
+# PHASE 0: ROUND_0_PLAN (ESCAPED, เก็บ placeholders ไว้)
 # ==========================================
 ROUND_0_PLAN = """
 ## YOUR TASK: PLAN TOURNAMENT DETECTION STRATEGY
@@ -292,17 +163,16 @@ You are planning how to find the TOURNAMENT CONTEXT for a specific tennis match.
 
 ## OUTPUT FORMAT:
 Return ONLY a JSON object:
-{
+{{
   "reasoning": "brief explanation of your strategy (50-100 words)",
   "queries": [
     "query 1",
     "query 2",
-    ...
     "query 8-12"
   ],
   "focus_areas": ["tournament", "surface", "round", "court"],
-  "expected_sources": ["ATP official", "ESPN", "local news", etc.]
-}
+  "expected_sources": ["ATP official", "ESPN", "local news"]
+}}
 
 ## RULES:
 - 8-12 queries (not too many, focused)
@@ -311,6 +181,9 @@ Return ONLY a JSON object:
 - Return ONLY JSON, no markdown
 """
 
+# ==========================================
+# PHASE 0: ROUND_0_OBSERVE (ESCAPED, เก็บ placeholders ไว้)
+# ==========================================
 ROUND_0_OBSERVE = """
 ## YOUR TASK: DETECT TOURNAMENT CONTEXT FROM SEARCH RESULTS
 
@@ -329,7 +202,7 @@ You are a TENNIS TOURNAMENT DETECTIVE. Analyze the search results and extract to
 4. **court**: Specific court name if found (e.g., "Center Court", "Court 1")
 5. **court_speed**: Float 1.0-4.0 (1.8=Roland Garros slow clay, 2.5=medium hard, 3.8=Wimbledon fast grass)
 6. **ball**: Ball brand (Dunlop ATP, Penn, Slazenger, Head, Wilson)
-7. **weather**: {temp: int, humidity: int, wind: int km/h, condition: "sunny/cloudy/rainy"}
+7. **weather**: temp (int), humidity (int), wind (int km/h), condition (sunny/cloudy/rainy)
 8. **confidence**: HIGH / MEDIUM / LOW
 9. **evidence**: 1-2 sentences explaining WHY you believe this
 10. **match_time**: ISO datetime if found (e.g., "2026-07-29T15:30:00")
@@ -354,19 +227,19 @@ You are a TENNIS TOURNAMENT DETECTIVE. Analyze the search results and extract to
 
 ## OUTPUT FORMAT:
 Return ONLY JSON (no markdown):
-{
+{{
   "tournament": "...",
   "surface": "...",
   "round": "...",
   "court": "...",
-  "court_speed": X.X,
+  "court_speed": 0.0,
   "ball": "...",
-  "weather": {"temp": X, "humidity": X, "wind": X, "condition": "..."},
+  "weather": {{"temp": 0, "humidity": 0, "wind": 0, "condition": "..."}},
   "confidence": "HIGH/MEDIUM/LOW",
   "evidence": "...",
   "match_time": "...",
   "source_urls": ["..."]
-}
+}}
 
 ## RULES:
 - If tournament NOT clearly found → confidence=LOW, tournament=null
@@ -374,6 +247,9 @@ Return ONLY JSON (no markdown):
 - Return ONLY JSON
 """
 
+# ==========================================
+# PHASE 0: ROUND_0_RETRY (ESCAPED, เก็บ placeholders ไว้)
+# ==========================================
 ROUND_0_RETRY = """
 ## YOUR TASK: LEARN FROM FAILURE AND PLAN NEW STRATEGY
 
@@ -423,12 +299,12 @@ Previous attempt to find tournament context FAILED. You must adapt.
 
 ## OUTPUT FORMAT:
 Return ONLY JSON:
-{
+{{
   "failure_analysis": "why previous attempt failed (50-100 words)",
   "new_strategy": "description of new approach",
   "queries": ["8-12 NEW queries"],
   "focus_shift": "what to focus on differently"
-}
+}}
 
 ## RULES:
 - Queries MUST be COMPLETELY DIFFERENT from previous attempt
@@ -437,7 +313,7 @@ Return ONLY JSON:
 """
 
 # ==========================================
-# 🆕 FIND UPCOMING MATCH (TEST FEATURE)
+# FIND UPCOMING: PLAN (ESCAPED, เก็บ placeholders ไว้)
 # ==========================================
 FIND_UPCOMING_PLAN = """
 ## YOUR TASK: PLAN SEARCH FOR UPCOMING TENNIS MATCHES
@@ -479,16 +355,15 @@ Find tennis matches scheduled in the NEXT 2 HOURS from now.
 
 ## OUTPUT FORMAT:
 Return ONLY JSON:
-{
+{{
   "time_window": "HH:MM - HH:MM [timezone]",
   "active_tournaments": ["tournament 1", "tournament 2"],
   "queries": [
     "query 1",
-    "query 2",
-    ...
+    "query 2"
   ],
-  "priority_sources": ["ATP official", "FlashScore", etc.]
-}
+  "priority_sources": ["ATP official", "FlashScore"]
+}}
 
 ## RULES:
 - 10-15 focused queries
@@ -496,6 +371,9 @@ Return ONLY JSON:
 - Return ONLY JSON
 """
 
+# ==========================================
+# FIND UPCOMING: OBSERVE (ESCAPED, เก็บ placeholders ไว้)
+# ==========================================
 FIND_UPCOMING_OBSERVE = """
 ## YOUR TASK: FIND MATCHES STARTING IN NEXT 2 HOURS
 
@@ -520,14 +398,14 @@ Analyze the search results and find tennis matches starting within 2 hours.
 
 ## TIME WINDOW CHECK:
 - Current time: {current_datetime}
-- Target window: {current_datetime} to {current_datetime + 2 hours}
+- Target window: next 2 hours
 - ONLY include matches STARTING in this window
 
 ## OUTPUT FORMAT:
 Return ONLY JSON:
-{
+{{
   "matches_found": [
-    {
+    {{
       "player_a": "...",
       "player_b": "...",
       "tournament": "...",
@@ -538,13 +416,13 @@ Return ONLY JSON:
       "match_type": "singles/doubles",
       "source_url": "...",
       "confidence": "HIGH/MEDIUM/LOW"
-    }
+    }}
   ],
-  "total_found": X,
+  "total_found": 0,
   "time_window_checked": "HH:MM - HH:MM",
-  "best_match": {...} or null if none found,
+  "best_match": null,
   "reasoning": "brief explanation of selection"
-}
+}}
 
 ## RULES:
 - ONLY matches STARTING in next 2 hours
