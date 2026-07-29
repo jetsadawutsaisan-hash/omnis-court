@@ -10,8 +10,8 @@ from monte_carlo import MonteCarloExecutor
 from orchestrator import Orchestrator
 
 # ==========================================
-# OMNIS-COURT DASHBOARD v4.6
-# Features: LocalStorage (Basic) + Find Upcoming Match + True Agentic
+# OMNIS-COURT DASHBOARD v4.7
+# Features: LocalStorage (Manual Save) + Find Upcoming Match + True Agentic
 # ==========================================
 
 st.set_page_config(
@@ -23,28 +23,28 @@ st.set_page_config(
 st.title("🎾 OMNIS-COURT Command Center")
 
 # ==========================================
-# LOCALSTORAGE HELPER (Basic - no external lib)
+# LOCALSTORAGE HELPER (Manual Save Only)
 # ==========================================
 def save_to_localstorage(key, value):
-    """Save to browser LocalStorage"""
+    """Save to browser LocalStorage (manual only)"""
     try:
         json_value = json.dumps(value, default=str)
         components.html(f"""
         <script>
         try {{
             localStorage.setItem('omnis_{key}', {json.dumps(json_value)});
+            console.log('Saved to localStorage: omnis_{key}');
         }} catch(e) {{
             console.error('LocalStorage save error:', e);
         }}
         </script>
         """, height=0)
     except Exception as e:
-        pass  # Silent fail
+        print(f"Save error: {e}")
 
 def clear_localstorage():
     """Clear all LocalStorage + session state"""
     try:
-        # Clear localStorage
         components.html("""
         <script>
         localStorage.removeItem('omnis_queue');
@@ -53,7 +53,6 @@ def clear_localstorage():
         </script>
         """, height=0)
         
-        # Clear session state
         st.session_state.analysis_queue = []
         st.session_state.analysis_results = []
         st.session_state.current_analysis = None
@@ -89,10 +88,8 @@ if 'find_upcoming_result' not in st.session_state:
     st.session_state.find_upcoming_result = None
 
 # ==========================================
-# AUTO-SAVE TO LOCALSTORAGE (ทุก rerun)
+# ❌ NO AUTO-SAVE (removed to prevent iframe hang)
 # ==========================================
-save_to_localstorage('queue', st.session_state.analysis_queue)
-save_to_localstorage('results', st.session_state.analysis_results)
 
 # ==========================================
 # LOAD CONFIG
@@ -681,15 +678,42 @@ with st.expander("🧪 Debug Tests"):
                 st.error(f"❌ {str(e)[:50]}")
     
     with col3:
-        if st.button("🗑️ Clear LocalStorage", type="secondary"):
+        if st.button("🗑️ Clear All Data", type="secondary"):
             clear_localstorage()
-            st.success("✅ LocalStorage + Session State cleared!")
+            st.success("✅ All data cleared!")
             st.rerun()
+
+# ==========================================
+# 💾 MANUAL SAVE TO LOCALSTORAGE (NEW!)
+# ==========================================
+st.markdown("---")
+st.subheader("💾 Save Data to Browser (Manual)")
+
+st.info("""
+**LocalStorage ทำงานเมื่อกดปุ่มเท่านั้น** (ไม่ auto-save เพื่อป้องกัน hang)
+- กด **Save** เพื่อบันทึกข้อมูลลง browser
+- ข้อมูลจะอยู่แม้ refresh หน้าเว็บ
+- กด **Clear** เพื่อลบข้อมูลทั้งหมด
+""")
+
+col_save1, col_save2 = st.columns(2)
+
+with col_save1:
+    if st.button("💾 Save to LocalStorage", type="primary", use_container_width=True):
+        save_to_localstorage('queue', st.session_state.analysis_queue)
+        save_to_localstorage('results', st.session_state.analysis_results)
+        st.success(f"✅ Saved! Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
+
+with col_save2:
+    if st.button("🗑️ Clear LocalStorage", use_container_width=True):
+        clear_localstorage()
+        st.success("✅ LocalStorage cleared!")
+        st.rerun()
 
 # ==========================================
 # FOOTER
 # ==========================================
 st.markdown("---")
-st.caption("OMNIS-COURT v7.1 | True Agentic + LocalStorage (Basic) | v4.6")
+st.caption("OMNIS-COURT v7.1 | True Agentic + LocalStorage (Manual) | v4.7")
 st.caption(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-st.caption(f"💾 Auto-saved to browser | Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
+st.caption(f"💾 Manual save only | Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
