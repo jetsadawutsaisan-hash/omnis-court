@@ -8,11 +8,10 @@ from llm_client import LLMClient
 from search_client import SearchClient
 from monte_carlo import MonteCarloExecutor
 from orchestrator import Orchestrator
-from streamlit_js_eval import streamlit_js_eval
 
 # ==========================================
-# OMNIS-COURT DASHBOARD v4.5
-# Features: LocalStorage (Working) + Find Upcoming Match + True Agentic
+# OMNIS-COURT DASHBOARD v4.6
+# Features: LocalStorage (Basic) + Find Upcoming Match + True Agentic
 # ==========================================
 
 st.set_page_config(
@@ -24,46 +23,8 @@ st.set_page_config(
 st.title("🎾 OMNIS-COURT Command Center")
 
 # ==========================================
-# LOCALSTORAGE HELPER (v2 - Working)
+# LOCALSTORAGE HELPER (Basic - no external lib)
 # ==========================================
-def load_from_localstorage():
-    """Load state from browser LocalStorage (ครั้งเดียวตอนเริ่มต้น)"""
-    if st.session_state.get('_localStorage_loaded', False):
-        return  # Already loaded
-    
-    try:
-        # Load queue
-        queue_str = streamlit_js_eval(
-            js_expressions="localStorage.getItem('omnis_queue')",
-            key='load_queue'
-        )
-        if queue_str and queue_str != 'null' and queue_str != '[]':
-            try:
-                queue_data = json.loads(queue_str)
-                if isinstance(queue_data, list):
-                    st.session_state.analysis_queue = queue_data
-            except:
-                pass
-        
-        # Load results
-        results_str = streamlit_js_eval(
-            js_expressions="localStorage.getItem('omnis_results')",
-            key='load_results'
-        )
-        if results_str and results_str != 'null' and results_str != '[]':
-            try:
-                results_data = json.loads(results_str)
-                if isinstance(results_data, list):
-                    st.session_state.analysis_results = results_data
-            except:
-                pass
-        
-        st.session_state._localStorage_loaded = True
-        
-    except Exception as e:
-        st.warning(f"⚠️ Could not load from LocalStorage: {e}")
-        st.session_state._localStorage_loaded = True  # Don't retry
-
 def save_to_localstorage(key, value):
     """Save to browser LocalStorage"""
     try:
@@ -99,7 +60,6 @@ def clear_localstorage():
         st.session_state.phase_0_state = 'idle'
         st.session_state.phase_0_data = None
         st.session_state.find_upcoming_result = None
-        st.session_state._localStorage_loaded = False  # Allow reload
         
     except Exception as e:
         st.error(f"❌ Clear error: {e}")
@@ -127,14 +87,6 @@ if 'phase_0_data' not in st.session_state:
 
 if 'find_upcoming_result' not in st.session_state:
     st.session_state.find_upcoming_result = None
-
-if '_localStorage_loaded' not in st.session_state:
-    st.session_state._localStorage_loaded = False
-
-# ==========================================
-# LOAD FROM LOCALSTORAGE (ครั้งแรกเท่านั้น)
-# ==========================================
-load_from_localstorage()
 
 # ==========================================
 # AUTO-SAVE TO LOCALSTORAGE (ทุก rerun)
@@ -738,6 +690,6 @@ with st.expander("🧪 Debug Tests"):
 # FOOTER
 # ==========================================
 st.markdown("---")
-st.caption("OMNIS-COURT v7.1 | True Agentic + LocalStorage v2 | v4.5")
+st.caption("OMNIS-COURT v7.1 | True Agentic + LocalStorage (Basic) | v4.6")
 st.caption(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 st.caption(f"💾 Auto-saved to browser | Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
