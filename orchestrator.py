@@ -71,7 +71,7 @@ class Orchestrator:
             
             # ═══ ROUND C: Analysis + Code Gen (with Chain-of-Thought) ═══
             notify("Round C", "🧠 Analyzing + Generating code (with reasoning)...")
-            analysis, python_code, reasoning = self._round_c_analyze(search_report, match_info)
+            reasoning, python_code = self._round_c_analyze(search_report, match_info)
             
             if not python_code:
                 notify("Round C", "❌ Failed to generate code")
@@ -248,7 +248,7 @@ SEARCH REPORT:
         
         response = self.llm.call_qwen(prompt, max_tokens=16384, temperature=0.5)
         if not response:
-            return None, None, None
+            return "", None
         
         # Parse Chain-of-Thought + Code
         reasoning = ""
@@ -279,7 +279,7 @@ SEARCH REPORT:
         if python_code:
             python_code = python_code.replace('```python', '').replace('```', '').strip()
         
-        return reasoning, python_code, reasoning
+        return reasoning, python_code
     
     def _round_d_simulate(self, python_code: str) -> Optional[Dict]:
         """Round D: Execute simulation"""
