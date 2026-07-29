@@ -8,10 +8,11 @@ from llm_client import LLMClient
 from search_client import SearchClient
 from monte_carlo import MonteCarloExecutor
 from orchestrator import Orchestrator
+from streamlit_js_eval import streamlit_js_eval
 
 # ==========================================
-# OMNIS-COURT DASHBOARD v4.4
-# Features: LocalStorage + Find Upcoming Match + True Agentic
+# OMNIS-COURT DASHBOARD v4.5
+# Features: LocalStorage (Working) + Find Upcoming Match + True Agentic
 # ==========================================
 
 st.set_page_config(
@@ -23,45 +24,85 @@ st.set_page_config(
 st.title("🎾 OMNIS-COURT Command Center")
 
 # ==========================================
-# LOCALSTORAGE HELPER
+# LOCALSTORAGE HELPER (v2 - Working)
 # ==========================================
 def load_from_localstorage():
-    """Load state from browser LocalStorage"""
-    html = """
-    <script>
-    const state = {
-        analysis_queue: JSON.parse(localStorage.getItem('omnis_queue') || '[]'),
-        analysis_results: JSON.parse(localStorage.getItem('omnis_results') || '[]'),
-    };
-    window.parent.postMessage({
-        type: 'streamlit:render',
-        data: state
-    }, '*');
-    </script>
-    """
-    # ใช้ simple approach: read from URL params / state
-    # เนื่องจาก streamlit ไม่มี native localStorage, ใช้ session_state เป็นหลัก
-    # แล้ว save ลง localStorage ผ่าน JS เมื่อ state เปลี่ยน
-    pass
+    """Load state from browser LocalStorage (ครั้งเดียวตอนเริ่มต้น)"""
+    if st.session_state.get('_localStorage_loaded', False):
+        return  # Already loaded
+    
+    try:
+        # Load queue
+        queue_str = streamlit_js_eval(
+            js_expressions="localStorage.getItem('omnis_queue')",
+            key='load_queue'
+        )
+        if queue_str and queue_str != 'null' and queue_str != '[]':
+            try:
+                queue_data = json.loads(queue_str)
+                if isinstance(queue_data, list):
+                    st.session_state.analysis_queue = queue_data
+            except:
+                pass
+        
+        # Load results
+        results_str = streamlit_js_eval(
+            js_expressions="localStorage.getItem('omnis_results')",
+            key='load_results'
+        )
+        if results_str and results_str != 'null' and results_str != '[]':
+            try:
+                results_data = json.loads(results_str)
+                if isinstance(results_data, list):
+                    st.session_state.analysis_results = results_data
+            except:
+                pass
+        
+        st.session_state._localStorage_loaded = True
+        
+    except Exception as e:
+        st.warning(f"⚠️ Could not load from LocalStorage: {e}")
+        st.session_state._localStorage_loaded = True  # Don't retry
 
 def save_to_localstorage(key, value):
     """Save to browser LocalStorage"""
-    json_value = json.dumps(value, default=str)
-    components.html(f"""
-    <script>
-    localStorage.setItem('omnis_{key}', {json.dumps(json_value)});
-    </script>
-    """, height=0)
+    try:
+        json_value = json.dumps(value, default=str)
+        components.html(f"""
+        <script>
+        try {{
+            localStorage.setItem('omnis_{key}', {json.dumps(json_value)});
+        }} catch(e) {{
+            console.error('LocalStorage save error:', e);
+        }}
+        </script>
+        """, height=0)
+    except Exception as e:
+        pass  # Silent fail
 
 def clear_localstorage():
-    """Clear all LocalStorage"""
-    components.html("""
-    <script>
-    localStorage.removeItem('omnis_queue');
-    localStorage.removeItem('omnis_results');
-    alert('✅ LocalStorage cleared! Refresh page.');
-    </script>
-    """, height=0)
+    """Clear all LocalStorage + session state"""
+    try:
+        # Clear localStorage
+        components.html("""
+        <script>
+        localStorage.removeItem('omnis_queue');
+        localStorage.removeItem('omnis_results');
+        console.log('LocalStorage cleared');
+        </script>
+        """, height=0)
+        
+        # Clear session state
+        st.session_state.analysis_queue = []
+        st.session_state.analysis_results = []
+        st.session_state.current_analysis = None
+        st.session_state.phase_0_state = 'idle'
+        st.session_state.phase_0_data = None
+        st.session_state.find_upcoming_result = None
+        st.session_state._localStorage_loaded = False  # Allow reload
+        
+    except Exception as e:
+        st.error(f"❌ Clear error: {e}")
 
 # ==========================================
 # INITIALIZE SESSION STATE
@@ -86,6 +127,14 @@ if 'phase_0_data' not in st.session_state:
 
 if 'find_upcoming_result' not in st.session_state:
     st.session_state.find_upcoming_result = None
+
+if '_localStorage_loaded' not in st.session_state:
+    st.session_state._localStorage_loaded = False
+
+# ==========================================
+# LOAD FROM LOCALSTORAGE (ครั้งแรกเท่านั้น)
+# ==========================================
+load_from_localstorage()
 
 # ==========================================
 # AUTO-SAVE TO LOCALSTORAGE (ทุก rerun)
@@ -141,7 +190,7 @@ check_health("SearXNG", searxng_url, "🔍")
 
 llm_url = omnis.get('llm_api_url', '')
 if llm_url:
-    check_health("Qwen3-14B", f"{llm_url}/models", "🧠")
+    check_health("Qwen3-8B", f"{llm_url}/models", "🧠")
 
 jina_url = omnis.get('jina_reader_url', '')
 if jina_url:
@@ -449,7 +498,7 @@ if st.session_state.current_analysis:
     elif st.session_state.phase_0_state == 'analyzing':
         st.markdown("### 🧠 Running Analysis Pipeline (True Agentic)")
         
-        st.info(f"""
+        st.markdown(f"""
         **Using Context:**
         - 🏆 {match.get('tournament', 'Unknown')}
         - 🎨 {match.get('surface', 'Unknown')}
@@ -681,17 +730,14 @@ with st.expander("🧪 Debug Tests"):
     
     with col3:
         if st.button("🗑️ Clear LocalStorage", type="secondary"):
-            st.session_state.analysis_queue = []
-            st.session_state.analysis_results = []
-            st.session_state.current_analysis = None
-            st.session_state.phase_0_state = 'idle'
             clear_localstorage()
+            st.success("✅ LocalStorage + Session State cleared!")
             st.rerun()
 
 # ==========================================
 # FOOTER
 # ==========================================
 st.markdown("---")
-st.caption("OMNIS-COURT v7.1 | True Agentic + LocalStorage | v4.4")
+st.caption("OMNIS-COURT v7.1 | True Agentic + LocalStorage v2 | v4.5")
 st.caption(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 st.caption(f"💾 Auto-saved to browser | Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
