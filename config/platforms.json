@@ -1,9 +1,9 @@
 {
   "omnis_court": {
-    "llm_api_url": "https://recommendation-maple-excuse-amenities.trycloudflare.com/v1",
+    "llm_api_url": "https://drunk-assistant-pie-campbell.trycloudflare.com/v1",
     "llm_model_name": "qwen3-14b",
     "llm_api_key": "not-needed",
-    "jina_reader_url": "https://superior-max-regarded-meetings.trycloudflare.com/extract",
+    "jina_reader_url": "https://execute-frequency-julia-compatibility.trycloudflare.com/extract",
     
     "llm_settings": {
       "max_tokens": 4096,
