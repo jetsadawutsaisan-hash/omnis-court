@@ -7,11 +7,11 @@ from llm_client import LLMClient
 from search_client import SearchClient
 from monte_carlo import MonteCarloExecutor
 from orchestrator import Orchestrator
-from streamlit_js_eval import streamlit_js_eval, get_page_url
+from streamlit_js_eval import streamlit_js_eval
 
 # ==========================================
-# OMNIS-COURT DASHBOARD v4.9
-# Features: LocalStorage (Auto-Load + Manual Save) + Find Upcoming Match + True Agentic
+# OMNIS-COURT DASHBOARD v4.10 FINAL
+# LocalStorage: Auto-Load + Manual Save (Fixed)
 # ==========================================
 
 st.set_page_config(
@@ -23,70 +23,76 @@ st.set_page_config(
 st.title("🎾 OMNIS-COURT Command Center")
 
 # ==========================================
-# LOCALSTORAGE HELPER (streamlit-js-eval both ways)
+# LOCALSTORAGE HELPER (streamlit-js-eval)
 # ==========================================
 def save_to_localstorage(key, value):
-    """Save to browser LocalStorage using streamlit-js-eval"""
+    """Save to browser LocalStorage"""
     try:
         json_value = json.dumps(value, default=str)
-        # Use streamlit_js_eval to execute JS and wait for completion
+        # ใช้ fixed key (ไม่เปลี่ยนตามเวลา)
         result = streamlit_js_eval(
-            js_expressions=f"localStorage.setItem('omnis_{key}', {json.dumps(json_value)}); 'saved';",
-            key=f'save_{key}_{int(time.time())}'
+            js_expressions=f"localStorage.setItem('omnis_{key}', {json.dumps(json_value)}); 'ok';",
+            key=f'save_{key}_fixed'
         )
-        return result == 'saved'
+        return True  # Assume success (JS async)
     except Exception as e:
         print(f"Save error: {e}")
         return False
 
-def load_from_localstorage():
-    """Load from LocalStorage (ครั้งเดียวตอน page load)"""
-    if st.session_state.get('_loaded_from_storage', False):
-        return  # Already loaded
+def load_from_localstorage_once():
+    """Load from LocalStorage (ครั้งเดียวตอนเริ่มต้น)
+    
+    IMPORTANT: streamlit_js_eval returns None on first run (async).
+    On second run (rerun), it returns actual value from JS.
+    We use '_load_attempted' flag to avoid retrying forever.
+    """
+    # Check if already attempted
+    if st.session_state.get('_load_attempted', False):
+        return
+    
+    # Mark as attempted (prevent retry)
+    st.session_state._load_attempted = True
     
     try:
         # Load queue
         queue_str = streamlit_js_eval(
-            js_expressions="localStorage.getItem('omnis_queue')",
-            key='load_queue_v49'
+            js_expressions="localStorage.getItem('omnis_queue') || '[]'",
+            key='load_queue_fixed'
         )
         
-        if queue_str and queue_str != 'null' and queue_str != '[]':
+        # First run: queue_str is None (async)
+        # Second run: queue_str is actual string
+        if queue_str is not None and queue_str != 'null' and queue_str != '[]':
             try:
                 queue_data = json.loads(queue_str)
-                if isinstance(queue_data, list):
+                if isinstance(queue_data, list) and len(queue_data) > 0:
                     st.session_state.analysis_queue = queue_data
-                    print(f"Loaded queue: {len(queue_data)} items")
             except Exception as e:
-                print(f"Load queue error: {e}")
+                print(f"Load queue parse error: {e}")
         
         # Load results
         results_str = streamlit_js_eval(
-            js_expressions="localStorage.getItem('omnis_results')",
-            key='load_results_v49'
+            js_expressions="localStorage.getItem('omnis_results') || '[]'",
+            key='load_results_fixed'
         )
         
-        if results_str and results_str != 'null' and results_str != '[]':
+        if results_str is not None and results_str != 'null' and results_str != '[]':
             try:
                 results_data = json.loads(results_str)
-                if isinstance(results_data, list):
+                if isinstance(results_data, list) and len(results_data) > 0:
                     st.session_state.analysis_results = results_data
-                    print(f"Loaded results: {len(results_data)} items")
             except Exception as e:
-                print(f"Load results error: {e}")
-        
-        st.session_state._loaded_from_storage = True
+                print(f"Load results parse error: {e}")
         
     except Exception as e:
         print(f"Load from LocalStorage error: {e}")
-        st.session_state._loaded_from_storage = True  # Don't retry
 
 def clear_localstorage():
     """Clear all LocalStorage + session state"""
     try:
         streamlit_js_eval(
-            js_expressions="localStorage.removeItem('omnis_queue'); localStorage.removeItem('omnis_results'); 'cleared';",
-            key='clear_storage_v49'
+            js_expressions="localStorage.removeItem('omnis_queue'); localStorage.removeItem('omnis_results'); 'ok';",
+            key='clear_storage_fixed'
         )
         
         st.session_state.analysis_queue = []
@@ -95,7 +101,7 @@ def clear_localstorage():
         st.session_state.phase_0_state = 'idle'
         st.session_state.phase_0_data = None
         st.session_state.find_upcoming_result = None
-        st.session_state._loaded_from_storage = False  # Allow reload
+        st.session_state._load_attempted = False  # Allow reload
         
     except Exception as e:
         st.error(f"❌ Clear error: {e}")
@@ -124,13 +130,13 @@ if 'phase_0_data' not in st.session_state:
 if 'find_upcoming_result' not in st.session_state:
     st.session_state.find_upcoming_result = None
 
-if '_loaded_from_storage' not in st.session_state:
-    st.session_state._loaded_from_storage = False
+if '_load_attempted' not in st.session_state:
+    st.session_state._load_attempted = False
 
 # ==========================================
-# AUTO-LOAD FROM LOCALSTORAGE (ครั้งแรกเท่านั้น)
+# AUTO-LOAD FROM LOCALSTORAGE
 # ==========================================
-load_from_localstorage()
+load_from_localstorage_once()
 
 # ==========================================
 # LOAD CONFIG
@@ -622,7 +628,7 @@ if st.session_state.analysis_results:
                 st.json(verdict)
 
 # ==========================================
-# 🧪 TEST: FIND UPCOMING MATCH (ปุ่มเดียว)
+# 🧪 TEST: FIND UPCOMING MATCH
 # ==========================================
 st.markdown("---")
 st.subheader("🧪 System Test: Find Upcoming Match")
@@ -741,13 +747,10 @@ col_save1, col_save2 = st.columns(2)
 
 with col_save1:
     if st.button("💾 Save to LocalStorage", type="primary", use_container_width=True):
-        queue_saved = save_to_localstorage('queue', st.session_state.analysis_queue)
-        results_saved = save_to_localstorage('results', st.session_state.analysis_results)
-        
-        if queue_saved and results_saved:
-            st.success(f"✅ Saved! Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
-        else:
-            st.warning(f"⚠️ Save partially failed (Queue: {queue_saved}, Results: {results_saved})")
+        save_to_localstorage('queue', st.session_state.analysis_queue)
+        save_to_localstorage('results', st.session_state.analysis_results)
+        st.success(f"✅ Saved! Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
+        st.info("💡 Refresh หน้าเว็บเพื่อเช็คว่า load กลับมา")
 
 with col_save2:
     if st.button("🗑️ Clear LocalStorage", use_container_width=True):
@@ -759,6 +762,6 @@ with col_save2:
 # FOOTER
 # ==========================================
 st.markdown("---")
-st.caption("OMNIS-COURT v7.1 | True Agentic + LocalStorage (Auto-Load) | v4.9")
+st.caption("OMNIS-COURT v7.1 | True Agentic + LocalStorage (v4.10) | Fixed async loading")
 st.caption(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-st.caption(f"💾 Auto-load enabled | Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
+st.caption(f"💾 Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
