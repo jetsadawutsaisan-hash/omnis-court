@@ -8,10 +8,11 @@ from llm_client import LLMClient
 from search_client import SearchClient
 from monte_carlo import MonteCarloExecutor
 from orchestrator import Orchestrator
+from streamlit_js_eval import streamlit_js_eval
 
 # ==========================================
-# OMNIS-COURT DASHBOARD v4.7
-# Features: LocalStorage (Manual Save) + Find Upcoming Match + True Agentic
+# OMNIS-COURT DASHBOARD v4.8
+# Features: LocalStorage (Auto-Load + Manual Save) + Find Upcoming Match + True Agentic
 # ==========================================
 
 st.set_page_config(
@@ -23,8 +24,48 @@ st.set_page_config(
 st.title("🎾 OMNIS-COURT Command Center")
 
 # ==========================================
-# LOCALSTORAGE HELPER (Manual Save Only)
+# LOCALSTORAGE HELPER (Auto-Load + Manual Save)
 # ==========================================
+def load_from_localstorage():
+    """Load from LocalStorage (ครั้งเดียวตอน page load)"""
+    if st.session_state.get('_loaded_from_storage', False):
+        return  # Already loaded
+    
+    try:
+        # Load queue
+        queue_str = streamlit_js_eval(
+            js_expressions="localStorage.getItem('omnis_queue')",
+            key='load_queue_eval'
+        )
+        
+        if queue_str and queue_str != 'null' and queue_str != '[]':
+            try:
+                queue_data = json.loads(queue_str)
+                if isinstance(queue_data, list):
+                    st.session_state.analysis_queue = queue_data
+            except Exception as e:
+                print(f"Load queue error: {e}")
+        
+        # Load results
+        results_str = streamlit_js_eval(
+            js_expressions="localStorage.getItem('omnis_results')",
+            key='load_results_eval'
+        )
+        
+        if results_str and results_str != 'null' and results_str != '[]':
+            try:
+                results_data = json.loads(results_str)
+                if isinstance(results_data, list):
+                    st.session_state.analysis_results = results_data
+            except Exception as e:
+                print(f"Load results error: {e}")
+        
+        st.session_state._loaded_from_storage = True
+        
+    except Exception as e:
+        print(f"Load from LocalStorage error: {e}")
+        st.session_state._loaded_from_storage = True  # Don't retry
+
 def save_to_localstorage(key, value):
     """Save to browser LocalStorage (manual only)"""
     try:
@@ -59,6 +100,7 @@ def clear_localstorage():
         st.session_state.phase_0_state = 'idle'
         st.session_state.phase_0_data = None
         st.session_state.find_upcoming_result = None
+        st.session_state._loaded_from_storage = False  # Allow reload
         
     except Exception as e:
         st.error(f"❌ Clear error: {e}")
@@ -86,6 +128,14 @@ if 'phase_0_data' not in st.session_state:
 
 if 'find_upcoming_result' not in st.session_state:
     st.session_state.find_upcoming_result = None
+
+if '_loaded_from_storage' not in st.session_state:
+    st.session_state._loaded_from_storage = False
+
+# ==========================================
+# AUTO-LOAD FROM LOCALSTORAGE (ครั้งแรกเท่านั้น)
+# ==========================================
+load_from_localstorage()
 
 # ==========================================
 # ❌ NO AUTO-SAVE (removed to prevent iframe hang)
@@ -684,7 +734,7 @@ with st.expander("🧪 Debug Tests"):
             st.rerun()
 
 # ==========================================
-# 💾 MANUAL SAVE TO LOCALSTORAGE (NEW!)
+# 💾 MANUAL SAVE TO LOCALSTORAGE
 # ==========================================
 st.markdown("---")
 st.subheader("💾 Save Data to Browser (Manual)")
@@ -692,7 +742,7 @@ st.subheader("💾 Save Data to Browser (Manual)")
 st.info("""
 **LocalStorage ทำงานเมื่อกดปุ่มเท่านั้น** (ไม่ auto-save เพื่อป้องกัน hang)
 - กด **Save** เพื่อบันทึกข้อมูลลง browser
-- ข้อมูลจะอยู่แม้ refresh หน้าเว็บ
+- **Auto-load** เมื่อ refresh หน้าเว็บ (ข้อมูลจะไม่หาย)
 - กด **Clear** เพื่อลบข้อมูลทั้งหมด
 """)
 
@@ -714,6 +764,6 @@ with col_save2:
 # FOOTER
 # ==========================================
 st.markdown("---")
-st.caption("OMNIS-COURT v7.1 | True Agentic + LocalStorage (Manual) | v4.7")
+st.caption("OMNIS-COURT v7.1 | True Agentic + LocalStorage (Auto-Load) | v4.8")
 st.caption(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-st.caption(f"💾 Manual save only | Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
+st.caption(f"💾 Auto-load enabled | Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
