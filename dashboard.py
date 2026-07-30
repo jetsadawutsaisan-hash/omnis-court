@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import requests
 import json
 import time
@@ -8,10 +7,10 @@ from llm_client import LLMClient
 from search_client import SearchClient
 from monte_carlo import MonteCarloExecutor
 from orchestrator import Orchestrator
-from streamlit_js_eval import streamlit_js_eval
+from streamlit_js_eval import streamlit_js_eval, get_page_url
 
 # ==========================================
-# OMNIS-COURT DASHBOARD v4.8
+# OMNIS-COURT DASHBOARD v4.9
 # Features: LocalStorage (Auto-Load + Manual Save) + Find Upcoming Match + True Agentic
 # ==========================================
 
@@ -24,8 +23,22 @@ st.set_page_config(
 st.title("🎾 OMNIS-COURT Command Center")
 
 # ==========================================
-# LOCALSTORAGE HELPER (Auto-Load + Manual Save)
+# LOCALSTORAGE HELPER (streamlit-js-eval both ways)
 # ==========================================
+def save_to_localstorage(key, value):
+    """Save to browser LocalStorage using streamlit-js-eval"""
+    try:
+        json_value = json.dumps(value, default=str)
+        # Use streamlit_js_eval to execute JS and wait for completion
+        result = streamlit_js_eval(
+            js_expressions=f"localStorage.setItem('omnis_{key}', {json.dumps(json_value)}); 'saved';",
+            key=f'save_{key}_{int(time.time())}'
+        )
+        return result == 'saved'
+    except Exception as e:
+        print(f"Save error: {e}")
+        return False
+
 def load_from_localstorage():
     """Load from LocalStorage (ครั้งเดียวตอน page load)"""
     if st.session_state.get('_loaded_from_storage', False):
@@ -35,7 +48,7 @@ def load_from_localstorage():
         # Load queue
         queue_str = streamlit_js_eval(
             js_expressions="localStorage.getItem('omnis_queue')",
-            key='load_queue_eval'
+            key='load_queue_v49'
         )
         
         if queue_str and queue_str != 'null' and queue_str != '[]':
@@ -43,13 +56,14 @@ def load_from_localstorage():
                 queue_data = json.loads(queue_str)
                 if isinstance(queue_data, list):
                     st.session_state.analysis_queue = queue_data
+                    print(f"Loaded queue: {len(queue_data)} items")
             except Exception as e:
                 print(f"Load queue error: {e}")
         
         # Load results
         results_str = streamlit_js_eval(
             js_expressions="localStorage.getItem('omnis_results')",
-            key='load_results_eval'
+            key='load_results_v49'
         )
         
         if results_str and results_str != 'null' and results_str != '[]':
@@ -57,6 +71,7 @@ def load_from_localstorage():
                 results_data = json.loads(results_str)
                 if isinstance(results_data, list):
                     st.session_state.analysis_results = results_data
+                    print(f"Loaded results: {len(results_data)} items")
             except Exception as e:
                 print(f"Load results error: {e}")
         
@@ -66,33 +81,13 @@ def load_from_localstorage():
         print(f"Load from LocalStorage error: {e}")
         st.session_state._loaded_from_storage = True  # Don't retry
 
-def save_to_localstorage(key, value):
-    """Save to browser LocalStorage (manual only)"""
-    try:
-        json_value = json.dumps(value, default=str)
-        components.html(f"""
-        <script>
-        try {{
-            localStorage.setItem('omnis_{key}', {json.dumps(json_value)});
-            console.log('Saved to localStorage: omnis_{key}');
-        }} catch(e) {{
-            console.error('LocalStorage save error:', e);
-        }}
-        </script>
-        """, height=0)
-    except Exception as e:
-        print(f"Save error: {e}")
-
 def clear_localstorage():
     """Clear all LocalStorage + session state"""
     try:
-        components.html("""
-        <script>
-        localStorage.removeItem('omnis_queue');
-        localStorage.removeItem('omnis_results');
-        console.log('LocalStorage cleared');
-        </script>
-        """, height=0)
+        streamlit_js_eval(
+            js_expressions="localStorage.removeItem('omnis_queue'); localStorage.removeItem('omnis_results'); 'cleared';",
+            key='clear_storage_v49'
+        )
         
         st.session_state.analysis_queue = []
         st.session_state.analysis_results = []
@@ -136,10 +131,6 @@ if '_loaded_from_storage' not in st.session_state:
 # AUTO-LOAD FROM LOCALSTORAGE (ครั้งแรกเท่านั้น)
 # ==========================================
 load_from_localstorage()
-
-# ==========================================
-# ❌ NO AUTO-SAVE (removed to prevent iframe hang)
-# ==========================================
 
 # ==========================================
 # LOAD CONFIG
@@ -750,9 +741,13 @@ col_save1, col_save2 = st.columns(2)
 
 with col_save1:
     if st.button("💾 Save to LocalStorage", type="primary", use_container_width=True):
-        save_to_localstorage('queue', st.session_state.analysis_queue)
-        save_to_localstorage('results', st.session_state.analysis_results)
-        st.success(f"✅ Saved! Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
+        queue_saved = save_to_localstorage('queue', st.session_state.analysis_queue)
+        results_saved = save_to_localstorage('results', st.session_state.analysis_results)
+        
+        if queue_saved and results_saved:
+            st.success(f"✅ Saved! Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
+        else:
+            st.warning(f"⚠️ Save partially failed (Queue: {queue_saved}, Results: {results_saved})")
 
 with col_save2:
     if st.button("🗑️ Clear LocalStorage", use_container_width=True):
@@ -764,6 +759,6 @@ with col_save2:
 # FOOTER
 # ==========================================
 st.markdown("---")
-st.caption("OMNIS-COURT v7.1 | True Agentic + LocalStorage (Auto-Load) | v4.8")
+st.caption("OMNIS-COURT v7.1 | True Agentic + LocalStorage (Auto-Load) | v4.9")
 st.caption(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 st.caption(f"💾 Auto-load enabled | Queue: {len(st.session_state.analysis_queue)} | Results: {len(st.session_state.analysis_results)}")
